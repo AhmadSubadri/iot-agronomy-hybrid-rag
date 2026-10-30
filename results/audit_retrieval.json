@@ -1,0 +1,14 @@
+{
+ "n": 100,
+ "context_full": 100,
+ "sensor_valid": 100,
+ "route_exact": 100,
+ "route_escalated": 0,
+ "route_effective": 100,
+ "latency_mean_ms": 113.32,
+ "latency_median_ms": 51.25,
+ "latency_max_ms": 913.1,
+ "vector_n": 10,
+ "vector_ok": 10,
+ "generated_at": "2026-10-30 09:38:47"
+}

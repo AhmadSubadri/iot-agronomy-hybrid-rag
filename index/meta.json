@@ -1,0 +1,9 @@
+{
+ "backend": "numpy-flat-ip",
+ "embedder": "sentence-transformers",
+ "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+ "dim": 384,
+ "n_chunks": 152,
+ "n_agronomi": 42,
+ "n_temporal": 110
+}

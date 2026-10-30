@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>KawalTani — Hybrid RAG untuk Rekomendasi Agronomi Padi</title>
+<style>
+:root{
+  --paper:#F3F0E7; --surface:#FBFAF5; --sunk:#EEEADF;
+  --ink:#1C201B; --ink2:#454A43; --mute:#7B7F75; --rule:#D8D2C2; --rule2:#E6E1D3;
+  --field:#2F4B2C; --field-soft:#E3E9DA; --band:rgba(47,75,44,.09);
+  --grain:#A97A22; --grain-soft:#F3E8CF;
+  --water:#33566F; --water-soft:#DFE8EE;
+  --clay:#A3412A; --clay-soft:#F4E1DA;
+  --serif:"Iowan Old Style","Palatino Linotype","Book Antiqua",Palatino,Georgia,serif;
+  --sans:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+  --mono:"Cascadia Mono","Cascadia Code",Consolas,"Courier New",monospace;
+  --fs:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--paper);color:var(--ink);font:var(--fs)/1.55 var(--sans);display:flex;flex-direction:column;overflow:hidden;font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0}
+input,select,textarea{font:inherit;color:inherit}
+.mono{font-family:var(--mono)}
+.label{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--mute);font-weight:600}
+
+/* ---------- header ---------- */
+header{display:flex;align-items:flex-end;gap:28px;padding:14px 24px 0;border-bottom:1px solid var(--rule);background:var(--surface)}
+.mark{padding-bottom:12px;min-width:0}
+.mark h1{font:600 19px/1.15 var(--serif);letter-spacing:-.01em}
+.mark h1 span{color:var(--mute);font-weight:400}
+.mark p{font-size:12px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:560px}
+nav{display:flex;gap:2px;margin-left:auto}
+nav button{padding:9px 14px 11px;color:var(--ink2);border-bottom:2px solid transparent;font-weight:500}
+nav button:hover{color:var(--ink)}
+nav button.on{color:var(--ink);border-bottom-color:var(--field)}
+nav button kbd{font:10px var(--mono);color:var(--mute);margin-left:6px}
+.status{padding-bottom:12px;font:11.5px/1.5 var(--mono);color:var(--mute);text-align:right;white-space:nowrap}
+.status b{color:var(--ink2);font-weight:500}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--mute);margin-right:5px;vertical-align:1px}
+.dot.ok{background:var(--field)} .dot.bad{background:var(--clay)}
+.present-btn{margin-bottom:10px;border:1px solid var(--rule);padding:5px 10px;border-radius:3px;font-size:12px;color:var(--ink2);background:var(--surface)}
+.present-btn:hover{border-color:var(--ink2)}
+
+main{flex:1;min-height:0;position:relative}
+.view{position:absolute;inset:0;display:none}
+.view.on{display:grid}
+
+/* ---------- shared column styles ---------- */
+.col{overflow-y:auto;min-height:0}
+.col.side{background:var(--surface);border-right:1px solid var(--rule);padding:18px 18px 28px}
+.col.trace{background:var(--surface);border-left:1px solid var(--rule);padding:18px 20px 28px}
+.sec{margin-bottom:22px}
+.sec>.label{display:block;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--rule2)}
+.tag{display:inline-block;font:600 10.5px/1 var(--mono);letter-spacing:.04em;padding:3px 6px;border-radius:2px;text-transform:uppercase;border:1px solid currentColor}
+.tag.sql{color:var(--water)} .tag.vector{color:var(--grain)} .tag.hybrid{color:var(--field)} .tag.baseline,.tag.none{color:var(--mute)}
+.tag.solid.sql{background:var(--water);color:#fff;border-color:var(--water)}
+.tag.solid.vector{background:var(--grain);color:#fff;border-color:var(--grain)}
+.tag.solid.hybrid{background:var(--field);color:#fff;border-color:var(--field)}
+.tag.alert{color:var(--clay)}
+
+/* ---------- konsultasi ---------- */
+#v-chat{grid-template-columns:290px minmax(0,1fr) 410px}
+.scn{display:block;width:100%;text-align:left;padding:10px 0 11px;border-bottom:1px solid var(--rule2)}
+.scn:last-child{border-bottom:0}
+.scn .n{font:600 12px var(--mono);color:var(--mute);margin-right:8px}
+.scn .t{font-weight:600;color:var(--ink)}
+.scn .q{display:block;font-size:12.5px;color:var(--ink2);margin:3px 0 6px 28px}
+.scn .tag{margin-left:28px}
+.scn .why{font-size:11.5px;color:var(--mute);margin-left:6px}
+.scn:hover .t{color:var(--field);text-decoration:underline;text-underline-offset:3px}
+.scn:disabled{opacity:.5;cursor:wait}
+
+.seg{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--rule);border-radius:3px;overflow:hidden}
+.seg button{padding:7px 6px;font-size:12.5px;text-align:center;border-right:1px solid var(--rule);border-bottom:1px solid var(--rule);color:var(--ink2);background:var(--surface)}
+.seg button:nth-child(2n){border-right:0} .seg button:nth-last-child(-n+2){border-bottom:0}
+.seg button.on{background:var(--ink);color:var(--surface)}
+.hint{font-size:12px;color:var(--mute);margin-top:7px}
+.field{margin-top:12px}
+.field>span{display:block;font-size:12px;color:var(--ink2);margin-bottom:4px}
+.field input,.field select{width:100%;padding:6px 8px;border:1px solid var(--rule);border-radius:3px;background:#fff;font-size:13px}
+.field input:focus,.field select:focus,textarea:focus{outline:2px solid var(--field-soft);border-color:var(--field)}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+details.key summary{font-size:12px;color:var(--ink2);cursor:pointer;margin-top:12px}
+
+.convo{display:flex;flex-direction:column;min-height:0;min-width:0}
+.thread{flex:1;overflow-y:auto;padding:28px 40px 20px}
+.empty{max-width:640px;margin:6vh auto 0;color:var(--ink2)}
+.empty h2{font:500 26px/1.25 var(--serif);color:var(--ink);margin-bottom:12px;letter-spacing:-.01em}
+.empty p{margin-bottom:10px}
+.flow{display:grid;grid-template-columns:repeat(5,auto);align-items:center;gap:8px;margin:22px 0 8px;font-size:12px}
+.flow div{border:1px solid var(--rule);background:var(--surface);padding:8px 10px;border-radius:3px;text-align:center}
+.flow div small{display:block;color:var(--mute);font-size:11px}
+.flow i{color:var(--mute);font-style:normal}
+
+.qa{max-width:860px;margin:0 auto 34px;padding-left:16px;border-left:2px solid transparent;cursor:pointer}
+.qa.sel{border-left-color:var(--field)}
+.qa .q{font:500 19px/1.35 var(--serif);color:var(--ink);margin-bottom:10px;letter-spacing:-.005em}
+.qa .meta{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font:12px var(--mono);color:var(--mute);padding-bottom:10px;margin-bottom:12px;border-bottom:1px solid var(--rule2)}
+.qa .meta b{color:var(--ink2);font-weight:500}
+.notice{font-size:12.5px;color:var(--ink2);background:var(--grain-soft);border-left:3px solid var(--grain);padding:8px 12px;margin-bottom:12px}
+.ans{color:var(--ink);font-size:14.5px;line-height:1.65}
+.ans h4{font:600 15px var(--serif);margin:16px 0 6px;color:var(--ink)}
+.ans h4:first-child{margin-top:0}
+.ans p{margin:0 0 9px}
+.ans ul,.ans ol{margin:0 0 10px 20px}
+.ans li{margin-bottom:4px}
+.ans li.sub{margin-left:18px;list-style:circle}
+.ans code{font:12.5px var(--mono);background:var(--sunk);padding:1px 4px;border-radius:2px}
+.ans mark{background:var(--clay-soft);color:var(--clay);font-weight:600;padding:0 2px}
+.ans .blk{font:12.5px/1.55 var(--mono);color:var(--ink2);background:var(--surface);border:1px solid var(--rule2);padding:10px 12px;margin:6px 0 12px;white-space:pre-wrap;border-radius:2px}
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.cmp>div>.label{display:block;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--field)}
+.cmp>div.base>.label{border-bottom-color:var(--rule)}
+.cmp>div.base .ans{color:var(--ink2)}
+.wait{font:13px var(--mono);color:var(--mute)}
+.wait::after{content:"";display:inline-block;width:1.2em;text-align:left;animation:dots 1.2s steps(4) infinite}
+@keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+
+.composer{border-top:1px solid var(--rule);background:var(--surface);padding:12px 40px 14px}
+.composer form{max-width:860px;margin:0 auto;display:flex;gap:10px;align-items:flex-end}
+.composer textarea{flex:1;resize:none;border:1px solid var(--rule);border-radius:3px;padding:9px 11px;background:#fff;height:42px;max-height:140px;line-height:1.45}
+.btn{border:1px solid var(--ink);background:var(--ink);color:var(--surface);padding:9px 18px;border-radius:3px;font-weight:600;height:42px}
+.btn:hover{background:var(--field);border-color:var(--field)}
+.btn:disabled{opacity:.45;cursor:wait}
+.btn.ghost{background:transparent;color:var(--ink);height:auto;padding:7px 12px;font-weight:500}
+.btn.ghost:hover{background:var(--sunk)}
+.composer .foot{max-width:860px;margin:6px auto 0;font-size:11.5px;color:var(--mute);display:flex;justify-content:space-between}
+
+/* trace */
+.steps{list-style:none;position:relative}
+.step{display:grid;grid-template-columns:18px 1fr auto;gap:0 10px;padding:7px 0 9px;position:relative}
+.step::before{content:"";position:absolute;left:5px;top:22px;bottom:-6px;width:1px;background:var(--rule)}
+.step:last-child::before{display:none}
+.step .pt{width:11px;height:11px;border-radius:50%;border:1.5px solid var(--rule);background:var(--surface);margin-top:5px;position:relative;z-index:1}
+.step .nm{font-weight:600;font-size:13px}
+.step .sb{grid-column:2/4;font-size:12px;color:var(--mute);line-height:1.45}
+.step .ms{font:12px var(--mono);color:var(--ink2);text-align:right}
+.step .bar{grid-column:2/4;height:3px;background:var(--rule2);margin-top:5px;position:relative;overflow:hidden}
+.step .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--ink2);width:0;transition:width .5s ease}
+.step.done .pt{background:var(--ink);border-color:var(--ink)}
+.step.done.k-sql .pt{background:var(--water);border-color:var(--water)} .step.done.k-sql .bar i{background:var(--water)}
+.step.done.k-vector .pt{background:var(--grain);border-color:var(--grain)} .step.done.k-vector .bar i{background:var(--grain)}
+.step.done.k-llm .pt{background:var(--field);border-color:var(--field)} .step.done.k-llm .bar i{background:var(--field)}
+.step.skip .nm,.step.skip .ms{color:var(--mute);font-weight:500}
+.step.skip .pt{border-style:dashed}
+.step.run .pt{border-color:var(--ink);animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(28,32,27,.25)}50%{box-shadow:0 0 0 5px rgba(28,32,27,0)}}
+.esc{color:var(--clay);font-weight:600}
+.kv{display:grid;grid-template-columns:110px 1fr;gap:5px 10px;font-size:12.5px}
+.kv dt{color:var(--mute)} .kv dd{color:var(--ink);word-break:break-word}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font:11.5px var(--mono);padding:2px 6px;border:1px solid var(--rule);border-radius:2px;background:#fff;color:var(--ink2)}
+details.ctx{border:1px solid var(--rule2);border-radius:3px;margin-bottom:8px;background:#fff}
+details.ctx summary{padding:7px 10px;font-size:12.5px;cursor:pointer;display:flex;justify-content:space-between;color:var(--ink2)}
+details.ctx summary span{font:11.5px var(--mono);color:var(--mute)}
+details.ctx pre{font:11.5px/1.5 var(--mono);white-space:pre-wrap;padding:10px;border-top:1px solid var(--rule2);max-height:300px;overflow:auto;color:var(--ink2)}
+.muted{color:var(--mute);font-size:12.5px}
+
+/* ---------- data lahan ---------- */
+#v-field{grid-template-columns:300px minmax(0,1fr)}
+.area{display:block;width:100%;text-align:left;padding:11px 12px;border:1px solid var(--rule2);border-radius:3px;margin-bottom:8px;background:#fff}
+.area:hover{border-color:var(--ink2)}
+.area.on{border-color:var(--field);box-shadow:inset 3px 0 0 var(--field)}
+.area .top{display:flex;justify-content:space-between;align-items:baseline}
+.area .top b{font:600 15px var(--serif)}
+.area .top span{font:11.5px var(--mono);color:var(--mute)}
+.area .pl{font-size:12px;color:var(--ink2);margin:1px 0 8px}
+.mx{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.mx div{font:10.5px/1.2 var(--mono);text-align:center;padding:4px 0 3px;border-radius:2px;background:var(--sunk);color:var(--ink2)}
+.mx div small{display:block;font-size:9.5px;color:var(--mute)}
+.mx div.low{background:var(--clay-soft);color:var(--clay)} .mx div.high{background:var(--grain-soft);color:var(--grain)}
+.legend{display:flex;gap:14px;font-size:11.5px;color:var(--mute);margin-top:4px;flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:10px;margin-right:5px;vertical-align:-1px;border-radius:2px}
+
+.fieldmain{padding:22px 32px 28px;overflow-y:auto;min-width:0}
+.fhead{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:14px;flex-wrap:wrap}
+.fhead h2{font:500 23px/1.2 var(--serif);letter-spacing:-.01em}
+.fhead p{font-size:12.5px;color:var(--mute)}
+.tabs{display:flex;border:1px solid var(--rule);border-radius:3px;overflow:hidden;background:var(--surface)}
+.tabs button{padding:6px 11px;font-size:12.5px;border-right:1px solid var(--rule);color:var(--ink2)}
+.tabs button:last-child{border-right:0}
+.tabs button.on{background:var(--ink);color:var(--surface)}
+.ctrls{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.chartbox{background:var(--surface);border:1px solid var(--rule);border-radius:3px;padding:14px 10px 6px;position:relative;user-select:none}
+#chart{display:block;width:100%;height:360px;cursor:crosshair}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--surface);font:11.5px/1.45 var(--mono);padding:6px 9px;border-radius:2px;display:none;white-space:nowrap;z-index:5}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--rule);border-top:0;background:var(--surface)}
+.stats div{padding:10px 14px;border-right:1px solid var(--rule2)}
+.stats div:last-child{border-right:0}
+.stats b{display:block;font:500 20px/1.2 var(--serif)}
+.stats span{font-size:11.5px;color:var(--mute)}
+.selbar{margin-top:16px;border:1px solid var(--rule);background:#fff;padding:14px 16px;display:flex;gap:18px;align-items:center;justify-content:space-between;border-radius:3px}
+.selbar .txt{font-size:13px;color:var(--ink2)}
+.selbar .txt b{color:var(--ink)}
+.selbar .q{font:13.5px var(--serif);color:var(--ink);margin-top:4px;font-style:italic}
+
+/* ---------- evaluasi ---------- */
+#v-eval{display:none;overflow-y:auto}
+#v-eval.on{display:block}
+.evalwrap{max-width:1120px;margin:0 auto;padding:28px 32px 48px}
+.evalwrap h2{font:500 25px/1.2 var(--serif);margin-bottom:4px;letter-spacing:-.01em}
+.evalwrap>p{color:var(--mute);font-size:13px;margin-bottom:22px}
+.figs{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--rule);background:var(--surface);margin-bottom:28px}
+.fig{padding:16px 18px;border-right:1px solid var(--rule2)}
+.fig:last-child{border-right:0}
+.fig b{display:block;font:500 32px/1.1 var(--serif);letter-spacing:-.02em}
+.fig b small{font-size:15px;color:var(--mute);font-weight:400}
+.fig .nm{font-weight:600;font-size:13px;margin:6px 0 2px}
+.fig p{font-size:12px;color:var(--mute);line-height:1.45}
+.grid2{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:28px}
+h3.st{font:600 15px var(--serif);margin-bottom:4px}
+p.cap{font-size:12px;color:var(--mute);margin-bottom:10px;line-height:1.5}
+table{width:100%;border-collapse:collapse;font-size:12.5px;background:var(--surface);border:1px solid var(--rule)}
+th{text-align:right;font-weight:600;color:var(--ink2);padding:7px 10px;border-bottom:1px solid var(--rule);background:var(--sunk);font-size:11.5px}
+td{text-align:right;padding:6px 10px;border-bottom:1px solid var(--rule2);font-family:var(--mono);font-size:12px}
+th:first-child,td:first-child{text-align:left}
+tr.best td{background:var(--field-soft);font-weight:600}
+#tchart{width:100%;height:300px;display:block;background:var(--surface);border:1px solid var(--rule)}
+.hyp td{font-family:var(--sans);font-size:12.5px;vertical-align:top;text-align:left}
+.hyp th{text-align:left}
+.st-ok{color:var(--field);font-weight:600} .st-wait{color:var(--grain);font-weight:600}
+.cmd{font:12px var(--mono);background:var(--ink);color:#E8E5DA;padding:10px 12px;border-radius:3px;white-space:pre-wrap;margin-top:8px}
+
+/* ---------- presentation mode ---------- */
+body.present{--fs:16px}
+body.present #v-chat{grid-template-columns:250px minmax(0,1fr) 440px}
+body.present .cfg{display:none}
+body.present .mark p{display:none}
+body.present .qa .q{font-size:23px}
+body.present .ans{font-size:16.5px}
+body.present .step .nm{font-size:14.5px}
+body.present .scn .q{display:none}
+
+@media (max-width:1250px){
+  #v-chat{grid-template-columns:250px minmax(0,1fr) 340px}
+  .thread,.composer{padding-left:24px;padding-right:24px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="mark">
+    <h1>KawalTani <span>/ Hybrid RAG</span></h1>
+    <p>Implementasi RAG berbasis data sensor IoT real-time untuk rekomendasi tindakan agronomi padi — Ahmad Subadri, Magister Informatika UIN Sunan Kalijaga</p>
+  </div>
+  <nav>
+    <button data-view="chat" class="on">Konsultasi<kbd>1</kbd></button>
+    <button data-view="field">Data Lahan<kbd>2</kbd></button>
+    <button data-view="eval">Evaluasi<kbd>3</kbd></button>
+  </nav>
+  <div class="status" id="status"><span class="dot"></span>menghubungkan…</div>
+  <button class="present-btn" id="presentBtn" title="Perbesar tampilan untuk presentasi (tombol P)">Mode presentasi</button>
+</header>
+
+<main>
+<!-- ================= KONSULTASI ================= -->
+<section class="view on" id="v-chat">
+  <aside class="col side">
+    <div class="sec">
+      <span class="label">Skenario uji</span>
+      <div id="scenarios"></div>
+    </div>
+    <div class="sec cfg">
+      <span class="label">Konfigurasi</span>
+      <div class="seg" id="modeSeg">
+        <button data-mode="rag" class="on">RAG + LLM</button>
+        <button data-mode="compare">RAG vs Baseline</button>
+        <button data-mode="local">Tanpa LLM</button>
+        <button data-mode="baseline">Baseline saja</button>
+      </div>
+      <p class="hint" id="modeHint"></p>
+      <label class="field"><span>Penyedia LLM</span>
+        <select id="provider">
+          <option value="gemini">Google Gemini</option>
+          <option value="openai">OpenAI</option>
+          <option value="ollama">Ollama (lokal)</option>
+          <option value="groq">Groq</option>
+        </select>
+      </label>
+      <label class="field"><span>Model</span><input id="model" value="gemini-3.5-flash-lite" /></label>
+      <div class="pair">
+        <label class="field"><span>Top-k dokumen</span><input id="topk" type="number" min="1" max="10" value="4" /></label>
+        <label class="field"><span>Titik harian</span><input id="days" type="number" min="3" max="30" value="14" /></label>
+      </div>
+      <details class="key"><summary>Kunci API sesi (opsional)</summary>
+        <label class="field"><span>Dipakai hanya untuk sesi ini; jika kosong memakai .env</span><input id="apikey" type="password" autocomplete="off" /></label>
+      </details>
+    </div>
+  </aside>
+
+  <div class="convo">
+    <div class="thread" id="thread">
+      <div class="empty" id="empty">
+        <h2>Tanyakan kondisi lahan dengan bahasa sehari-hari.</h2>
+        <p>Pertanyaan diklasifikasikan lalu dijawab dari dua sumber: pembacaan sensor di MySQL (<span class="mono">tm_sensor_read</span>) dan pedoman agronomi padi yang diindeks secara semantik. Bila data faktual ternyata menyimpang dari ambang normal, sistem otomatis menambahkan pedoman agronomi.</p>
+        <div class="flow">
+          <div>Pertanyaan<small>bahasa alami</small></div><i>→</i>
+          <div>Intent &amp; jalur<small>SQL · Vector · Hybrid</small></div><i>→</i>
+          <div>Konteks<small>sensor + pedoman</small></div>
+        </div>
+        <p class="muted">Pilih salah satu skenario di kiri, atau ketik pertanyaan di bawah. Klik sebuah jawaban untuk melihat jejak pipeline-nya di panel kanan.</p>
+      </div>
+    </div>
+    <div class="composer">
+      <form id="askForm">
+        <textarea id="q" rows="1" placeholder="Contoh: Bagaimana kondisi kalium di area 5 pada 1 Februari 2025 s/d 14 Februari 2025?"></textarea>
+        <button class="btn" id="send" type="submit">Tanya</button>
+      </form>
+      <div class="foot"><span>Enter untuk kirim · Shift+Enter baris baru · / untuk fokus</span><span id="modeFoot"></span></div>
+    </div>
+  </div>
+
+  <aside class="col trace">
+    <div class="sec">
+      <span class="label">Jejak pipeline</span>
+      <ol class="steps" id="steps"></ol>
+    </div>
+    <div class="sec">
+      <span class="label">Hasil ekstraksi intent</span>
+      <dl class="kv" id="intentKv"><dt>—</dt><dd class="muted">belum ada kueri</dd></dl>
+    </div>
+    <div class="sec">
+      <span class="label">Sumber yang dipakai</span>
+      <div class="muted" style="margin-bottom:5px">Sensor (<span class="mono">tm_sensor_read</span>)</div>
+      <div class="chips" id="srcSensor"><span class="muted">—</span></div>
+      <div class="muted" style="margin:10px 0 5px">Pedoman agronomi (<span class="mono">vector_docs</span>)</div>
+      <div class="chips" id="srcDocs"><span class="muted">—</span></div>
+    </div>
+    <div class="sec">
+      <span class="label">Konteks yang dikirim ke LLM</span>
+      <div id="ctxBox"><span class="muted">—</span></div>
+    </div>
+  </aside>
+</section>
+
+<!-- ================= DATA LAHAN ================= -->
+<section class="view" id="v-field">
+  <aside class="col side">
+    <div class="sec">
+      <span class="label">Area pengamatan</span>
+      <div id="areas"><span class="muted">memuat…</span></div>
+      <div class="legend"><span><i style="background:var(--sunk)"></i>normal</span><span><i style="background:var(--clay-soft)"></i>di bawah ambang</span><span><i style="background:var(--grain-soft)"></i>di atas ambang</span></div>
+    </div>
+    <div class="sec">
+      <span class="label">Vector store</span>
+      <p class="muted" id="vecInfo">—</p>
+      <button class="btn ghost" id="syncBtn" style="margin-top:8px">Sinkronisasi inkremental</button>
+      <p class="hint" id="syncOut">Menambahkan ringkasan mingguan baru dari MySQL tanpa membangun ulang indeks.</p>
+    </div>
+  </aside>
+  <div class="fieldmain">
+    <div class="fhead">
+      <div>
+        <h2 id="fTitle">—</h2>
+        <p id="fSub">—</p>
+      </div>
+      <div class="ctrls">
+        <div class="tabs" id="paramTabs"></div>
+        <div class="tabs" id="rangeTabs">
+          <button data-d="30">30 hari</button><button data-d="60">60 hari</button><button data-d="120" class="on">120 hari</button>
+        </div>
+      </div>
+    </div>
+    <div class="chartbox">
+      <svg id="chart"></svg>
+      <div class="tip" id="tip"></div>
+    </div>
+    <div class="stats" id="fStats"></div>
+    <div class="selbar">
+      <div>
+        <div class="txt" id="selTxt">Seret pada grafik untuk memilih rentang tanggal, lalu tanyakan rentang itu ke sistem.</div>
+        <div class="q" id="selQ"></div>
+      </div>
+      <button class="btn" id="selAsk" disabled>Tanyakan rentang ini</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= EVALUASI ================= -->
+<section class="view" id="v-eval">
+  <div class="evalwrap">
+    <h2>Hasil pengujian</h2>
+    <p id="evalStamp">Angka di halaman ini dibaca langsung dari folder <span class="mono">results/</span>.</p>
+    <div class="figs" id="figs"></div>
+    <div class="grid2">
+      <div>
+        <h3 class="st">Trade-off panjang konteks dan latensi retrieval</h3>
+        <p class="cap">Tujuan penelitian ke-4. Setiap titik adalah rerata 100 pertanyaan uji untuk satu kombinasi top-k dokumen (K) dan jumlah titik harian (D). Konfigurasi bertanda adalah yang dipakai sebagai bawaan sistem.</p>
+        <svg id="tchart"></svg>
+      </div>
+      <div>
+        <h3 class="st">Tabel konfigurasi</h3>
+        <p class="cap">Cakupan fakta = persentase angka kunci dan istilah tindakan pada jawaban acuan yang termuat di konteks.</p>
+        <table id="ttable"></table>
+      </div>
+    </div>
+    <div style="margin-top:30px">
+      <h3 class="st">Status hipotesis</h3>
+      <p class="cap">H1 dan H2 memerlukan jawaban LLM untuk kedua sistem lalu dinilai dengan RAGAS; status di bawah diperbarui setelah perintah tersebut dijalankan.</p>
+      <table class="hyp">
+        <thead><tr><th style="width:70px">Kode</th><th>Pernyataan</th><th style="width:250px">Bukti saat ini</th><th style="width:130px">Status</th></tr></thead>
+        <tbody id="hypBody"></tbody>
+      </table>
+      <div class="cmd">python run_evaluation.py collect --mode rag      --provider gemini --model gemini-3.5-flash-lite --out results/rag_gemini.json
+python run_evaluation.py collect --mode baseline --provider gemini --model gemini-3.5-flash-lite --out results/base_gemini.json
+python run_evaluation.py score --results results/rag_gemini.json
+python run_evaluation.py score --results results/base_gemini.json
+python run_evaluation.py hypothesis --rag-csv results/rag_gemini_ragas.csv --baseline-csv results/base_gemini_ragas.csv</div>
+    </div>
+  </div>
+</section>
+</main>
+
+<script>
+/* ------------------------------------------------------------ data */
+const SCENARIOS = [
+  {t:"Kueri spasiotemporal + saran", r:"hybrid", why:"H1, H2",
+   q:"Berapa rata-rata nitrogen di area 3 dalam tujuh hari terakhir dan apakah perlu pemupukan tambahan?"},
+  {t:"Anomali tersembunyi di balik rata-rata", r:"sql → hybrid", why:"routing adaptif",
+   q:"Bagaimana kondisi nitrogen di area 3 pada periode 15 Januari 2025 s/d 30 Januari 2025?"},
+  {t:"Perbandingan fase tumbuh (HST)", r:"sql", why:"jendela HST",
+   q:"Bandingkan kelembaban tanah di area 1 antara fase anakan dan fase bunting!"},
+  {t:"Perbandingan dua tanggal", r:"sql", why:"dua jendela",
+   q:"Bandingkan pH tanah di area 4 antara tanggal 10 Februari 2025 dan 10 Maret 2025"},
+  {t:"Pengetahuan agronomi umum", r:"vector", why:"tanpa data sensor",
+   q:"Apa gejala visual kekurangan kalium pada daun tanaman padi dan bagaimana penanganannya?"},
+  {t:"Data faktual terbaru", r:"sql", why:"H3 latensi",
+   q:"Berapa pH tanah terbaru di area 4?"},
+];
+const MODE_HINT = {
+  rag:"Hybrid retrieval, lalu jawaban disusun LLM dari konteks.",
+  compare:"Pertanyaan yang sama dijawab sistem usulan dan chatbot baseline tanpa akses data.",
+  local:"Hanya retrieval. Menampilkan konteks apa adanya — tidak perlu kunci API.",
+  baseline:"LLM menjawab tanpa retrieval, seperti chatbot KawalTani saat ini.",
+};
+const DEFAULT_MODEL = {gemini:"gemini-3.5-flash-lite", openai:"gpt-4o-mini", ollama:"llama3:8b", groq:"llama-3.1-8b-instant"};
+const PARAMS = [
+  ["nitro","N","Nitrogen","nitrogen"],["phos","P","Fosfor","fosfor"],["pot","K","Kalium","kalium"],
+  ["ph","pH","pH tanah","pH tanah"],["hum","RH","Kelembapan","kelembaban tanah"],
+  ["temp","T","Suhu","suhu tanah"],["con","EC","Konduktivitas","konduktivitas listrik (EC)"],
+];
+const BULAN = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+const BLN = BULAN.map(b => b.slice(0,3));
+
+const S = {mode:"rag", history:[], sel:-1, busy:false, area:3, param:"nitro", days:120, series:null, range:null};
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const ms = s => s == null ? "—" : (s*1000 < 10 ? (s*1000).toFixed(1) : Math.round(s*1000).toLocaleString("id-ID")) + " ms";
+const parseD = s => { const [y,m,d] = s.slice(0,10).split("-").map(Number); return new Date(y, m-1, d); };
+const fmtD = (d, long) => `${d.getDate()} ${long ? BULAN[d.getMonth()] : BLN[d.getMonth()]} ${d.getFullYear()}`;
+const fmtShort = d => `${d.getDate()} ${BLN[d.getMonth()]}`;
+const num = (v, p=2) => Number(v).toLocaleString("id-ID", {maximumFractionDigits:p});
+
+/* ------------------------------------------------------------ nav */
+function show(view){
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.view === view));
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "v-"+view));
+  if (view === "field" && !S.series) loadSeries();
+  if (view === "field") requestAnimationFrame(() => S.series && drawChart());
+  if (view === "eval") loadEval();
+}
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => show(b.dataset.view));
+$("presentBtn").onclick = () => { document.body.classList.toggle("present"); if (S.series) drawChart(); };
+document.addEventListener("keydown", e => {
+  const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+  if (typing) return;
+  if (e.key === "1") show("chat"); else if (e.key === "2") show("field"); else if (e.key === "3") show("eval");
+  else if (e.key.toLowerCase() === "p") $("presentBtn").click();
+  else if (e.key === "/") { e.preventDefault(); show("chat"); $("q").focus(); }
+});
+
+/* ------------------------------------------------------------ health */
+async function loadHealth(){
+  try {
+    const h = await (await fetch("/health")).json();
+    const vm = h.vector_meta || {};
+    $("status").innerHTML = `<span class="dot ok"></span><b>${esc(h.database)}</b> · ${vm.n_chunks ?? "?"} chunk vektor<br>LLM bawaan: <b>${esc(h.llm_model)}</b>`;
+    $("vecInfo").innerHTML = `${vm.n_agronomi} potongan pedoman agronomi + ${vm.n_temporal} ringkasan mingguan sensor. Model <span class="mono">${esc((vm.model||"").split("/").pop())}</span>, ${vm.dim} dimensi.`;
+    if (h.llm_provider) { $("provider").value = h.llm_provider; $("model").value = h.llm_model; }
+  } catch(e) {
+    $("status").innerHTML = `<span class="dot bad"></span>server tidak merespons`;
+  }
+}
+
+/* ------------------------------------------------------------ konsultasi */
+function renderScenarios(){
+  $("scenarios").innerHTML = SCENARIOS.map((s,i) => {
+    const cls = s.r.includes("→") ? "alert" : s.r;
+    return `<button class="scn" data-i="${i}"><span class="n">${String(i+1).padStart(2,"0")}</span><span class="t">${esc(s.t)}</span>
+      <span class="q">${esc(s.q)}</span><span class="tag ${cls}">${esc(s.r)}</span><span class="why">${esc(s.why)}</span></button>`;
+  }).join("");
+  document.querySelectorAll(".scn").forEach(b => b.onclick = () => ask(SCENARIOS[b.dataset.i].q));
+}
+document.querySelectorAll("#modeSeg button").forEach(b => b.onclick = () => setMode(b.dataset.mode));
+function setMode(m){
+  S.mode = m;
+  document.querySelectorAll("#modeSeg button").forEach(b => b.classList.toggle("on", b.dataset.mode === m));
+  $("modeHint").textContent = MODE_HINT[m];
+  $("modeFoot").textContent = "Mode: " + document.querySelector(`#modeSeg button[data-mode="${m}"]`).textContent;
+}
+$("provider").onchange = () => $("model").value = DEFAULT_MODEL[$("provider").value] || "";
+
+const q = $("q");
+q.addEventListener("input", () => { q.style.height = "42px"; q.style.height = Math.min(q.scrollHeight, 140) + "px"; });
+q.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("askForm").requestSubmit(); } });
+$("askForm").onsubmit = e => { e.preventDefault(); const v = q.value.trim(); if (v) { q.value = ""; q.style.height = "42px"; ask(v); } };
+
+/* minimal markdown → html, tuned for LLM answers and verbalized sensor context */
+function md(text){
+  const lines = String(text || "").replace(/\r/g,"").split("\n");
+  let out = [], list = null, para = [];
+  const inline = s => esc(s)
+    .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+    .replace(/(^|[^*])\*([^*\s][^*]*?)\*(?!\*)/g, "$1<i>$2</i>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/(PERHATIAN:|DI BAWAH ambang normal[^.;,)]*|DI ATAS ambang normal[^.;,)]*)/g, "<mark>$1</mark>");
+  const flushP = () => { if (para.length) { out.push(`<p>${para.map(inline).join("<br>")}</p>`); para = []; } };
+  const flushL = () => { if (list) { out.push(`<${list.t}>${list.items.join("")}</${list.t}>`); list = null; } };
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    let m;
+    if (!line.trim()) { flushP(); flushL(); continue; }
+    if ((m = line.match(/^#{1,6}\s+(.*)$/))) { flushP(); flushL(); out.push(`<h4>${inline(m[1])}</h4>`); continue; }
+    if (/^\[DATA SENSOR|^\[PENGETAHUAN|^\[RINGKASAN/.test(line.trim())) { flushP(); flushL(); out.push(`<div class="blk">${inline(line.trim())}</div>`); continue; }
+    if ((m = line.match(/^(\s*)[*\-•]\s+(.*)$/))) {
+      flushP(); if (!list || list.t !== "ul") { flushL(); list = {t:"ul", items:[]}; }
+      list.items.push(`<li${m[1].length >= 2 ? ' class="sub"' : ""}>${inline(m[2])}</li>`); continue;
+    }
+    if ((m = line.match(/^(\s*)\d+[.)]\s+(.*)$/))) {
+      flushP(); if (!list || list.t !== "ol") { flushL(); list = {t:"ol", items:[]}; }
+      list.items.push(`<li>${inline(m[2])}</li>`); continue;
+    }
+    if (list && /^\s{2,}/.test(raw)) { list.items[list.items.length-1] = list.items[list.items.length-1].replace(/<\/li>$/, " " + inline(line.trim()) + "</li>"); continue; }
+    flushL(); para.push(line);
+  }
+  flushP(); flushL();
+  return out.join("");
+}
+
+const STEP_DEF = [
+  {id:"intent", k:"",       nm:"Klasifikasi intent"},
+  {id:"route",  k:"",       nm:"Penentuan jalur"},
+  {id:"sql",    k:"sql",    nm:"Structured retrieval"},
+  {id:"vector", k:"vector", nm:"Semantic retrieval"},
+  {id:"fusion", k:"",       nm:"Fusi konteks"},
+  {id:"llm",    k:"llm",    nm:"Generasi jawaban"},
+];
+let runTimer = null;
+function renderSteps(states){
+  $("steps").innerHTML = STEP_DEF.map(s => {
+    const st = states[s.id] || {c:"", sb:"", ms:""};
+    return `<li class="step ${st.c} k-${s.k||"x"}"><span class="pt"></span><span class="nm">${s.nm}</span><span class="ms">${st.ms ?? ""}</span>
+      <span class="sb">${st.sb || ""}</span><span class="bar"><i style="width:${st.w || 0}%"></i></span></li>`;
+  }).join("");
+}
+function animateRunning(){
+  clearInterval(runTimer);
+  let i = 0;
+  const base = {intent:{sb:"pola regex, kamus agronomi, parser tanggal Indonesia"}, route:{}, sql:{sb:"MySQL · tm_sensor_read"},
+                vector:{sb:"MiniLM-L12 · cosine top-k"}, fusion:{}, llm:{sb:"menunggu respons"}};
+  const tick = () => {
+    const st = {};
+    STEP_DEF.forEach((s, j) => st[s.id] = {...base[s.id], c: j < i ? "done" : j === i ? "run" : ""});
+    renderSteps(st);
+    if (i < STEP_DEF.length - 1) i++;
+  };
+  tick(); runTimer = setInterval(tick, 380);
+}
+
+function traceFor(r){
+  clearInterval(runTimer);
+  const st = r.stage_s || {}, lat = r.latency || {};
+  const isBase = r.mode === "baseline";
+  const esc8 = r.initial_route && r.route && r.initial_route !== r.route && r.initial_route !== "none";
+  const times = {intent: st.intent || 0, sql: st.sql || 0, vector: st.vector || 0, llm: lat.llm_s || 0};
+  const fus = Math.max(0, (lat.retrieval_s || 0) - times.intent - times.sql - times.vector);
+  times.fusion = fus;
+  const max = Math.max(...Object.values(times), 0.001);
+  const w = s => Math.max(2, times[s] / max * 100);
+  const skip = (sb) => ({c:"skip", ms:"dilewati", sb});
+  const states = {};
+  if (isBase) {
+    ["intent","route","sql","vector","fusion"].forEach(s => states[s] = skip(s === "intent" ? "baseline tidak memakai retrieval" : ""));
+  } else {
+    const it = r.intent || {};
+    states.intent = {c:"done", ms:ms(times.intent), w:w("intent"),
+      sb:`parameter: ${(it.params||[]).join(", ") || "—"} · area: ${(it.areas||[]).join(", ") || "—"}`};
+    states.route = {c:"done", ms:"",
+      sb: esc8 ? `<span class="tag ${r.initial_route}">${r.initial_route}</span> → <span class="tag solid ${r.route}">${r.route}</span> <span class="esc">adaptif: data di luar ambang</span>`
+               : `<span class="tag solid ${r.route}">${r.route}</span>`};
+    states.sql = (r.sensors||[]).length || times.sql > 0
+      ? {c:"done", ms:ms(times.sql), w:w("sql"), sb:`${(r.sensors||[]).length} sensor · MySQL tm_sensor_read`}
+      : skip("jalur vector murni");
+    states.vector = (r.doc_sources||[]).length
+      ? {c:"done", ms:ms(times.vector), w:w("vector"), sb:`${r.doc_sources.length} potongan · MiniLM-L12 · cosine`}
+      : skip("tidak dibutuhkan untuk kueri faktual");
+    states.fusion = {c:"done", ms:ms(fus), w:w("fusion"), sb:`${num(r.context_chars,0)} karakter · ±${num(r.est_prompt_tokens,0)} token prompt`};
+  }
+  states.llm = lat.llm_s > 0
+    ? {c:"done", ms:ms(lat.llm_s), w:w("llm"), sb:`${esc(r.llm?.model || "")}${r.llm?.completion_tokens ? " · " + r.llm.completion_tokens + " token keluaran" : ""}`}
+    : skip(r.is_local_fallback ? "LLM tidak tersedia: " + esc((r.llm_notice||"").slice(0,90)) : "mode tanpa LLM");
+  renderSteps(states);
+
+  // intent
+  const it = r.intent || {};
+  const win = it.compare_windows?.length ? it.compare_windows.map(([a,b]) => `${a.slice(0,10)} → ${b.slice(0,10)}`).join("<br>")
+            : it.hst_windows?.length ? it.hst_windows.map(([a,b]) => `HST ${a}–${b}`).join(", ")
+            : it.start ? `${it.start.slice(0,16)} → ${(it.end||"").slice(0,16)}` : "terbaru tersedia";
+  $("intentKv").innerHTML = isBase ? `<dt>—</dt><dd class="muted">tidak ada ekstraksi pada baseline</dd>` : `
+    <dt>Jalur awal</dt><dd><span class="tag ${it.route}">${esc(it.route)}</span></dd>
+    <dt>Parameter</dt><dd>${esc((it.params||[]).join(", ") || "—")}</dd>
+    <dt>Area / perangkat</dt><dd>${esc([...(it.areas||[]), ...(it.devices||[])].join(", ") || "—")}</dd>
+    <dt>Jendela waktu</dt><dd class="mono" style="font-size:12px">${win}</dd>
+    <dt>Perbandingan</dt><dd>${it.is_comparison ? "ya" : "tidak"}</dd>
+    <dt>Butuh saran</dt><dd>${it.needs_advice ? "ya" : "tidak"}</dd>`;
+  $("srcSensor").innerHTML = (r.sensors||[]).length ? r.sensors.map(s => `<span class="chip">${esc(s)}</span>`).join("") : `<span class="muted">tidak ada</span>`;
+  $("srcDocs").innerHTML = (r.doc_sources||[]).length ? r.doc_sources.map(s => `<span class="chip">${esc(s)}</span>`).join("") : `<span class="muted">tidak ada</span>`;
+  const box = [];
+  if (r.sensor_context) box.push(`<details class="ctx" open><summary>Data sensor terverbalisasi <span>${num(r.sensor_context.length,0)} kar</span></summary><pre>${esc(r.sensor_context)}</pre></details>`);
+  if (r.agro_context) box.push(`<details class="ctx"><summary>Potongan pedoman agronomi <span>${num(r.agro_context.length,0)} kar</span></summary><pre>${esc(r.agro_context)}</pre></details>`);
+  $("ctxBox").innerHTML = box.join("") || `<span class="muted">${isBase ? "baseline tidak menerima konteks" : "—"}</span>`;
+}
+
+function selectQA(i){
+  S.sel = i;
+  document.querySelectorAll(".qa").forEach(el => el.classList.toggle("sel", +el.dataset.i === i));
+  const r = S.history[i]; if (r && r.res) traceFor(r.res);
+}
+
+function renderAnswer(i){
+  const h = S.history[i], el = document.querySelector(`.qa[data-i="${i}"]`);
+  const r = h.res;
+  if (!r) { el.querySelector(".body").innerHTML = `<p class="wait">mengambil konteks dan menyusun jawaban</p>`; return; }
+  if (r.error) { el.querySelector(".body").innerHTML = `<div class="notice">${esc(r.error)}</div>`; return; }
+  const esc8 = r.initial_route && r.route && r.initial_route !== r.route && r.initial_route !== "none";
+  const meta = [
+    r.mode === "baseline" ? `<span class="tag baseline">baseline</span>` : `<span class="tag solid ${r.route}">${r.route}</span>`,
+    esc8 ? `<span class="tag alert">eskalasi adaptif</span>` : "",
+    r.mode !== "baseline" ? `<span>retrieval <b>${ms(r.latency.retrieval_s)}</b></span>` : "",
+    r.latency.llm_s ? `<span>LLM <b>${ms(r.latency.llm_s)}</b></span>` : "",
+    `<span>total <b>${ms(r.latency.total_s)}</b></span>`,
+    `<span>${esc(r.llm?.model || "")}</span>`,
+  ].join("");
+  const notice = r.is_local_fallback ? `<div class="notice">LLM tidak dapat dipanggil (${esc(r.llm_notice)}). Ditampilkan konteks hasil retrieval apa adanya.</div>` : "";
+  let body;
+  if (r.mode === "compare") {
+    const b = r.baseline || {};
+    body = `<div class="cmp">
+      <div><span class="label">Sistem usulan · Hybrid RAG</span><div class="ans">${md(r.answer)}</div></div>
+      <div class="base"><span class="label">Baseline · LLM tanpa akses data${b.latency_s ? " · " + ms(b.latency_s) : ""}</span>
+        <div class="ans">${b.answer ? md(b.answer) : `<p class="muted">Baseline memerlukan LLM. Isi kunci API untuk membandingkan.</p>`}</div></div></div>`;
+  } else body = `<div class="ans">${md(r.answer)}</div>`;
+  el.querySelector(".meta").innerHTML = meta;
+  el.querySelector(".body").innerHTML = notice + body;
+}
+
+async function ask(question){
+  if (S.busy) return;
+  show("chat");
+  S.busy = true; $("send").disabled = true;
+  document.querySelectorAll(".scn").forEach(b => b.disabled = true);
+  $("empty")?.remove();
+  const i = S.history.push({q:question, res:null}) - 1;
+  const div = document.createElement("article");
+  div.className = "qa"; div.dataset.i = i;
+  div.innerHTML = `<div class="q">${esc(question)}</div><div class="meta"></div><div class="body"></div>`;
+  div.onclick = () => selectQA(i);
+  $("thread").appendChild(div);
+  renderAnswer(i);
+  document.querySelectorAll(".qa").forEach(el => el.classList.toggle("sel", +el.dataset.i === i));
+  div.scrollIntoView({behavior:"smooth", block:"start"});
+  animateRunning();
+  try {
+    const res = await fetch("/ask", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+      question, mode:S.mode, provider:$("provider").value, model:$("model").value.trim() || null,
+      api_key:$("apikey").value.trim() || null,
+      top_k:+$("topk").value || 4, max_daily_points:+$("days").value || 14,
+    })});
+    const data = await res.json();
+    S.history[i].res = res.ok ? data : {error: data.detail || res.statusText};
+  } catch(e) {
+    S.history[i].res = {error: "Gagal menghubungi server: " + e};
+  }
+  renderAnswer(i);
+  if (!S.history[i].res.error) selectQA(i); else { clearInterval(runTimer); renderSteps({}); }
+  S.busy = false; $("send").disabled = false;
+  document.querySelectorAll(".scn").forEach(b => b.disabled = false);
+}
+
+/* ------------------------------------------------------------ data lahan */
+async function loadAreas(){
+  try {
+    const d = await (await fetch("/sensors/overview")).json();
+    S.areas = d.areas;
+    $("areas").innerHTML = d.areas.map(a => {
+      const by = Object.fromEntries(a.metrics.map(m => [m.param, m]));
+      const cells = PARAMS.map(([p, s]) => { const m = by[p]; return m
+        ? `<div class="${m.state}" title="${esc(m.label)}: ${m.value} ${esc(m.unit)} (normal ${m.min_norm}–${m.max_norm})"><small>${s}</small>${num(m.value, m.value >= 100 ? 0 : 1)}</div>`
+        : `<div><small>${s}</small>—</div>`; }).join("");
+      return `<button class="area${a.area === S.area ? " on" : ""}" data-a="${a.area}">
+        <div class="top"><b>Area ${a.area}</b><span>${esc(a.dev_id)}</span></div>
+        <div class="pl">${esc(a.plant_name || "—")}${a.hst != null ? ` · ${a.hst} HST` : ""}</div>
+        <div class="mx">${cells}</div></button>`;
+    }).join("");
+    document.querySelectorAll(".area").forEach(b => b.onclick = () => { S.area = +b.dataset.a; document.querySelectorAll(".area").forEach(x => x.classList.toggle("on", x === b)); loadSeries(); });
+  } catch(e) { $("areas").innerHTML = `<span class="muted">gagal memuat data sensor</span>`; }
+}
+function renderParamTabs(){
+  $("paramTabs").innerHTML = PARAMS.map(([p, s, l]) => `<button data-p="${p}" title="${l}" class="${p === S.param ? "on" : ""}">${s}</button>`).join("");
+  document.querySelectorAll("#paramTabs button").forEach(b => b.onclick = () => { S.param = b.dataset.p; renderParamTabs(); loadSeries(); });
+}
+document.querySelectorAll("#rangeTabs button").forEach(b => b.onclick = () => {
+  S.days = +b.dataset.d; document.querySelectorAll("#rangeTabs button").forEach(x => x.classList.toggle("on", x === b)); loadSeries();
+});
+
+async function loadSeries(){
+  S.range = null; updateSel();
+  try {
+    const d = await (await fetch(`/sensors/series?area=${S.area}&param=${S.param}&days=${S.days}`)).json();
+    d.points.forEach(p => p.date = parseD(p.d));
+    S.series = d;
+    const a = (S.areas || []).find(x => x.area === S.area) || {};
+    $("fTitle").textContent = `${d.label} · Area ${d.area}`;
+    $("fSub").innerHTML = `<span class="mono">${d.ds_id}</span> · perangkat ${esc(d.dev_id)} · ${esc(a.plant_name || "")}${d.planted ? " · tanam " + fmtD(parseD(d.planted)) : ""} · ambang normal ${d.min_norm}–${d.max_norm} ${esc(d.unit)}`;
+    drawChart(); renderStats();
+  } catch(e) { $("fTitle").textContent = "Gagal memuat deret sensor"; }
+}
+
+function renderStats(){
+  const d = S.series, P = d.points;
+  if (!P.length) { $("fStats").innerHTML = ""; return; }
+  const last = P[P.length-1];
+  const mean = P.reduce((s,p) => s + p.avg, 0) / P.length;
+  const outAvg = P.filter(p => p.avg < d.min_norm || p.avg > d.max_norm).length;
+  const outAny = P.filter(p => p.min < d.min_norm || p.max > d.max_norm).length;
+  $("fStats").innerHTML = `
+    <div><b>${num(last.avg)} <small style="font-size:12px;color:var(--mute)">${esc(d.unit)}</small></b><span>rata-rata hari terakhir (${fmtShort(last.date)})</span></div>
+    <div><b>${num(mean)}</b><span>rata-rata ${P.length} hari</span></div>
+    <div><b>${outAvg}</b><span>hari dengan rata-rata di luar ambang</span></div>
+    <div><b style="color:${outAny > outAvg ? "var(--clay)" : "inherit"}">${outAny}</b><span>hari dengan ≥1 pembacaan di luar ambang</span></div>`;
+}
+
+const SVGNS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent){ const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent && parent.appendChild(e); return e; }
+
+function drawChart(){
+  const svg = $("chart"), d = S.series; if (!d) return;
+  svg.innerHTML = "";
+  const W = svg.clientWidth || 800, H = svg.clientHeight || 360;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const m = {l:54, r:18, t:12, b:46};
+  const P = d.points;
+  if (!P.length) { el("text", {x:W/2, y:H/2, "text-anchor":"middle", fill:"#7B7F75", "font-size":13}, svg).textContent = "Tidak ada data pada rentang ini"; return; }
+  const t0 = +P[0].date, t1 = Math.max(+P[P.length-1].date, t0 + 864e5);
+  let lo = Math.min(d.min_norm, ...P.map(p => p.min)), hi = Math.max(d.max_norm, ...P.map(p => p.max));
+  const pad = (hi - lo) * 0.08 || 1; lo -= pad; hi += pad;
+  const X = t => m.l + (t - t0) / (t1 - t0) * (W - m.l - m.r);
+  const Y = v => m.t + (1 - (v - lo) / (hi - lo)) * (H - m.t - m.b);
+  S.chart = {X, Y, m, W, H, t0, t1};
+
+  // y grid
+  const step = niceStep((hi - lo) / 5);
+  for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) {
+    el("line", {x1:m.l, x2:W-m.r, y1:Y(v), y2:Y(v), stroke:"#E6E1D3"}, svg);
+    el("text", {x:m.l-8, y:Y(v)+4, "text-anchor":"end", fill:"#7B7F75", "font-size":11, "font-family":"Consolas,monospace"}, svg).textContent = num(v, step < 1 ? 1 : 0);
+  }
+  // normal band
+  el("rect", {x:m.l, width:W-m.l-m.r, y:Y(d.max_norm), height:Y(d.min_norm)-Y(d.max_norm), fill:"rgba(47,75,44,.08)"}, svg);
+  [[d.max_norm,"batas atas"],[d.min_norm,"batas bawah"]].forEach(([v, l]) => {
+    el("line", {x1:m.l, x2:W-m.r, y1:Y(v), y2:Y(v), stroke:"#2F4B2C", "stroke-dasharray":"4 4", "stroke-width":1, opacity:.55}, svg);
+    el("text", {x:W-m.r-4, y:Y(v)-5, "text-anchor":"end", fill:"#2F4B2C", "font-size":10.5}, svg).textContent = `${l} ${v}`;
+  });
+  // envelope
+  const env = P.map((p,i) => `${i ? "L" : "M"}${X(+p.date)},${Y(p.max)}`).join("") + P.slice().reverse().map(p => `L${X(+p.date)},${Y(p.min)}`).join("") + "Z";
+  el("path", {d:env, fill:"rgba(69,74,67,.13)"}, svg);
+  // avg line
+  el("path", {d:P.map((p,i) => `${i ? "L" : "M"}${X(+p.date)},${Y(p.avg)}`).join(""), fill:"none", stroke:"#1C201B", "stroke-width":1.6, "stroke-linejoin":"round"}, svg);
+  // hidden-anomaly ticks + out-of-range points
+  P.forEach(p => {
+    const hidden = (p.min < d.min_norm || p.max > d.max_norm);
+    const avgOut = p.avg < d.min_norm || p.avg > d.max_norm;
+    if (hidden) el("rect", {x:X(+p.date)-1.5, y:H-m.b+3, width:3, height:7, fill:"#A3412A"}, svg);
+    if (avgOut) el("circle", {cx:X(+p.date), cy:Y(p.avg), r:2.8, fill:"#A3412A"}, svg);
+  });
+  // x axis
+  el("line", {x1:m.l, x2:W-m.r, y1:H-m.b, y2:H-m.b, stroke:"#D8D2C2"}, svg);
+  const nT = Math.max(2, Math.floor((W - m.l - m.r) / 110));
+  for (let k = 0; k <= nT; k++) {
+    const t = t0 + (t1 - t0) * k / nT, dd = new Date(t);
+    const x = X(t);
+    el("text", {x, y:H-m.b+24, "text-anchor":"middle", fill:"#454A43", "font-size":11}, svg).textContent = fmtShort(dd);
+    if (d.planted) {
+      const hst = Math.round((t - +parseD(d.planted)) / 864e5);
+      el("text", {x, y:H-m.b+38, "text-anchor":"middle", fill:"#7B7F75", "font-size":10, "font-family":"Consolas,monospace"}, svg).textContent = `${hst} HST`;
+    }
+  }
+  el("text", {x:m.l, y:H-m.b+24, "text-anchor":"end", fill:"#A3412A", "font-size":10, dx:-8}, svg).textContent = "▮ luar ambang";
+  // selection layer & interaction
+  S.selRect = el("rect", {y:m.t, height:H-m.t-m.b, fill:"rgba(51,86,111,.14)", stroke:"#33566F", "stroke-width":1, display:"none"}, svg);
+  S.cross = el("line", {y1:m.t, y2:H-m.b, stroke:"#454A43", "stroke-width":1, display:"none"}, svg);
+  S.dotH = el("circle", {r:4, fill:"#FBFAF5", stroke:"#1C201B", "stroke-width":1.6, display:"none"}, svg);
+  const hit = el("rect", {x:m.l, y:m.t, width:W-m.l-m.r, height:H-m.t-m.b, fill:"transparent"}, svg);
+  bindChart(hit);
+  if (S.range) paintRange();
+}
+function niceStep(raw){ const p = Math.pow(10, Math.floor(Math.log10(raw))); const f = raw / p; return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * p; }
+
+function nearest(px){
+  const {m, W, t0, t1} = S.chart, P = S.series.points;
+  const t = t0 + (px - m.l) / (W - m.l - m.r) * (t1 - t0);
+  let best = 0, bd = Infinity;
+  P.forEach((p, i) => { const dd = Math.abs(+p.date - t); if (dd < bd) { bd = dd; best = i; } });
+  return best;
+}
+function bindChart(hit){
+  const svg = $("chart"), tip = $("tip");
+  let drag = null;
+  const px = e => { const r = svg.getBoundingClientRect(); return (e.clientX - r.left) * (S.chart.W / r.width); };
+  hit.onmousemove = e => {
+    const i = nearest(px(e)), p = S.series.points[i], {X, Y} = S.chart, d = S.series;
+    S.cross.setAttribute("x1", X(+p.date)); S.cross.setAttribute("x2", X(+p.date)); S.cross.setAttribute("display", "");
+    S.dotH.setAttribute("cx", X(+p.date)); S.dotH.setAttribute("cy", Y(p.avg)); S.dotH.setAttribute("display", "");
+    const flag = (p.min < d.min_norm || p.max > d.max_norm) ? "<br><span style='color:#F0B7A6'>ada pembacaan di luar ambang</span>" : "";
+    tip.innerHTML = `${fmtD(p.date)}${p.hst != null ? " · " + p.hst + " HST" : ""}<br>rata-rata ${num(p.avg)} ${esc(d.unit)}<br>min ${num(p.min)} · maks ${num(p.max)} · n=${p.n}${flag}`;
+    const box = $("chart").parentElement.getBoundingClientRect(), r = svg.getBoundingClientRect();
+    const sx = r.left - box.left + X(+p.date) * r.width / S.chart.W;
+    tip.style.display = "block";
+    tip.style.left = Math.min(sx + 12, box.width - tip.offsetWidth - 8) + "px";
+    tip.style.top = "18px";
+    if (drag != null) { S.range = [Math.min(drag, i), Math.max(drag, i)]; paintRange(); }
+  };
+  hit.onmouseleave = () => { tip.style.display = "none"; S.cross.setAttribute("display", "none"); S.dotH.setAttribute("display", "none"); };
+  hit.onmousedown = e => { drag = nearest(px(e)); S.range = [drag, drag]; paintRange(); };
+  window.onmouseup = () => { if (drag != null) { drag = null; updateSel(); } };
+}
+function paintRange(){
+  if (!S.range || !S.chart) return;
+  const P = S.series.points, {X} = S.chart;
+  const a = X(+P[S.range[0]].date) - 3, b = X(+P[S.range[1]].date) + 3;
+  S.selRect.setAttribute("x", a); S.selRect.setAttribute("width", Math.max(6, b - a)); S.selRect.setAttribute("display", "");
+}
+function updateSel(){
+  if (!S.range || !S.series) {
+    $("selTxt").textContent = "Seret pada grafik untuk memilih rentang tanggal, lalu tanyakan rentang itu ke sistem.";
+    $("selQ").textContent = ""; $("selAsk").disabled = true; return;
+  }
+  const d = S.series, P = d.points.slice(S.range[0], S.range[1] + 1);
+  const a = P[0].date, b = P[P.length-1].date;
+  const mean = P.reduce((s,p) => s + p.avg, 0) / P.length;
+  const lo = Math.min(...P.map(p => p.min)), hi = Math.max(...P.map(p => p.max));
+  const bad = P.filter(p => p.min < d.min_norm || p.max > d.max_norm).length;
+  $("selTxt").innerHTML = `<b>${fmtD(a)} – ${fmtD(b)}</b> (${P.length} hari) · rata-rata <b>${num(mean)}</b> ${esc(d.unit)} · rentang ${num(lo)}–${num(hi)} · <b style="color:${bad ? "var(--clay)" : "inherit"}">${bad}</b> hari ada pembacaan di luar ambang`;
+  const word = PARAMS.find(p => p[0] === d.param)[3];
+  S.rangeQ = `Bagaimana kondisi ${word} di area ${d.area} pada periode ${fmtD(a, true)} s/d ${fmtD(b, true)}? Apa tindakan yang disarankan?`;
+  $("selQ").textContent = "“" + S.rangeQ + "”";
+  $("selAsk").disabled = false;
+}
+$("selAsk").onclick = () => S.rangeQ && ask(S.rangeQ);
+window.addEventListener("resize", () => { if ($("v-field").classList.contains("on")) drawChart(); if ($("v-eval").classList.contains("on")) drawTradeoff(); });
+
+$("syncBtn").onclick = async () => {
+  const b = $("syncBtn"); b.disabled = true; b.textContent = "Menyinkronkan…";
+  try {
+    const r = await (await fetch("/sync-incremental", {method:"POST"})).json();
+    $("syncOut").innerHTML = `${r.added_chunks} chunk baru ditambahkan dalam ${r.elapsed_s} detik. Total ${r.total_temporal_chunks} ringkasan temporal; watermark <span class="mono">${esc(r.watermark)}</span>.`;
+    loadHealth();
+  } catch(e) { $("syncOut").textContent = "Sinkronisasi gagal: " + e; }
+  b.disabled = false; b.textContent = "Sinkronisasi inkremental";
+};
+
+/* ------------------------------------------------------------ evaluasi */
+let EVAL = null;
+async function loadEval(){
+  if (!EVAL) { try { EVAL = await (await fetch("/results/summary")).json(); } catch(e) { EVAL = {audit:null, tradeoff:[]}; } }
+  const a = EVAL.audit;
+  const fig = (val, unit, nm, cap) => `<div class="fig"><b>${val}${unit ? ` <small>${unit}</small>` : ""}</b><div class="nm">${nm}</div><p>${cap}</p></div>`;
+  $("figs").innerHTML = a ? [
+    fig(`${a.route_effective}`, `/ ${a.n}`, "Ketepatan jalur retrieval", `Rute hasil klasifikasi sesuai label dataset QA (${a.route_escalated} melalui eskalasi adaptif).`),
+    fig(`${a.vector_ok}`, `/ ${a.vector_n}`, "Kueri konseptual ke jalur vector", "Pertanyaan umum tanpa lokasi/tanggal tidak memicu kueri SQL."),
+    fig(`${num(a.latency_median_ms,0)}`, "ms", "Median latensi retrieval", `Rerata ${num(a.latency_mean_ms,0)} ms, maks ${num(a.latency_max_ms,0)} ms. Batas H3 untuk respons total: 5.000 ms.`),
+    fig(`${a.sensor_valid}`, `/ ${a.n}`, "Konteks sensor terisi", "Kueri yang membutuhkan data sensor memperoleh konteks SQL yang tidak kosong."),
+  ].join("") : `<div class="fig" style="grid-column:1/-1"><div class="nm">Ringkasan audit belum tersedia</div><p>Jalankan <span class="mono">python run_evaluation.py audit-retrieval</span> untuk mengisi bagian ini.</p></div>`;
+  if (a) $("evalStamp").innerHTML = `Angka dibaca langsung dari <span class="mono">results/</span> · audit terakhir ${esc(a.generated_at)} pada ${a.n} pertanyaan uji + ${a.vector_n} kueri konseptual.`;
+
+  const T = EVAL.tradeoff;
+  $("ttable").innerHTML = `<thead><tr><th>K · D</th><th>Token prompt</th><th>Latensi rerata</th><th>P95</th><th>Cakupan fakta</th></tr></thead><tbody>` +
+    T.map(r => `<tr class="${r.top_k === 4 && r.max_daily_points === 14 ? "best" : ""}"><td>K${r.top_k} · D${r.max_daily_points}</td><td>${num(r.avg_est_tokens,0)}</td><td>${num(r.avg_latency_ms,1)} ms</td><td>${num(r.p95_latency_ms,0)} ms</td><td>${num(r.fact_coverage_pct,1)}%</td></tr>`).join("") + "</tbody>";
+  drawTradeoff();
+
+  const h3ok = a && a.latency_median_ms < 5000;
+  $("hypBody").innerHTML = `
+    <tr><td><b>H1</b></td><td>Faithfulness sistem Hybrid RAG lebih tinggi secara signifikan daripada chatbot baseline.</td><td>Menunggu skor RAGAS kedua sistem (uji t berpasangan dan Wilcoxon).</td><td class="st-wait">belum diuji</td></tr>
+    <tr><td><b>H2</b></td><td>Answer relevancy sistem Hybrid RAG lebih tinggi secara signifikan daripada baseline.</td><td>Menunggu skor RAGAS kedua sistem.</td><td class="st-wait">belum diuji</td></tr>
+    <tr><td><b>H3</b></td><td>Waktu respons sistem di bawah 5 detik.</td><td>${a ? `Retrieval median ${num(a.latency_median_ms,0)} ms. Uji coba Gemini: total ±2,5–3 detik per kueri; angka resmi dari hasil <span class="mono">collect</span>.` : "—"}</td><td class="${h3ok ? "st-ok" : "st-wait"}">${h3ok ? "retrieval terpenuhi" : "belum diuji"}</td></tr>`;
+}
+function drawTradeoff(){
+  const svg = $("tchart"), T = (EVAL && EVAL.tradeoff) || []; svg.innerHTML = "";
+  if (!T.length) return;
+  const W = svg.clientWidth || 600, H = svg.clientHeight || 300; svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const m = {l:56, r:20, t:18, b:42};
+  const xs = T.map(r => r.avg_est_tokens), ys = T.map(r => r.avg_latency_ms);
+  const x0 = Math.min(...xs) * .92, x1 = Math.max(...xs) * 1.04, y0 = 0, y1 = Math.max(...ys) * 1.15;
+  const X = v => m.l + (v - x0) / (x1 - x0) * (W - m.l - m.r), Y = v => m.t + (1 - (v - y0) / (y1 - y0)) * (H - m.t - m.b);
+  const ys5 = niceStep(y1 / 5);
+  for (let v = 0; v <= y1; v += ys5) {
+    el("line", {x1:m.l, x2:W-m.r, y1:Y(v), y2:Y(v), stroke:"#E6E1D3"}, svg);
+    el("text", {x:m.l-8, y:Y(v)+4, "text-anchor":"end", fill:"#7B7F75", "font-size":11, "font-family":"Consolas,monospace"}, svg).textContent = num(v,0);
+  }
+  const xs5 = niceStep((x1 - x0) / 5);
+  for (let v = Math.ceil(x0 / xs5) * xs5; v <= x1; v += xs5)
+    el("text", {x:X(v), y:H-m.b+18, "text-anchor":"middle", fill:"#7B7F75", "font-size":11, "font-family":"Consolas,monospace"}, svg).textContent = num(v,0);
+  el("text", {x:(W+m.l)/2, y:H-6, "text-anchor":"middle", fill:"#454A43", "font-size":11.5}, svg).textContent = "rerata token prompt";
+  el("text", {x:14, y:(H-m.b+m.t)/2, "text-anchor":"middle", fill:"#454A43", "font-size":11.5, transform:`rotate(-90 14 ${(H-m.b+m.t)/2})`}, svg).textContent = "latensi retrieval (ms)";
+  const colD = {3:"#A97A22", 7:"#33566F", 14:"#2F4B2C"};
+  [...new Set(T.map(r => r.max_daily_points))].forEach(D => {
+    const pts = T.filter(r => r.max_daily_points === D).sort((a,b) => a.top_k - b.top_k);
+    el("path", {d:pts.map((r,i) => `${i ? "L" : "M"}${X(r.avg_est_tokens)},${Y(r.avg_latency_ms)}`).join(""), fill:"none", stroke:colD[D] || "#454A43", "stroke-width":1.2, opacity:.6}, svg);
+  });
+  T.forEach(r => {
+    const best = r.top_k === 4 && r.max_daily_points === 14;
+    el("circle", {cx:X(r.avg_est_tokens), cy:Y(r.avg_latency_ms), r:best ? 5.5 : 3.8, fill:colD[r.max_daily_points] || "#454A43", stroke:best ? "#1C201B" : "none", "stroke-width":2}, svg);
+    el("text", {x:X(r.avg_est_tokens)+7, y:Y(r.avg_latency_ms)-6, fill:"#454A43", "font-size":10.5, "font-family":"Consolas,monospace"}, svg).textContent = `K${r.top_k}`;
+  });
+  let lx = m.l + 10;
+  Object.entries(colD).forEach(([D, c]) => { el("circle", {cx:lx, cy:m.t+4, r:4, fill:c}, svg); el("text", {x:lx+8, y:m.t+8, fill:"#454A43", "font-size":11}, svg).textContent = `D=${D} titik harian`; lx += 120; });
+}
+
+/* ------------------------------------------------------------ init */
+renderScenarios(); setMode("rag"); renderSteps({}); renderParamTabs();
+loadHealth(); loadAreas();
+</script>
+</body>
+</html>

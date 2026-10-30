@@ -1,0 +1,34 @@
+# Environment variables & secrets (PENTING: Jangan bocorkan API Key ke GitHub)
+.env
+*.env
+!.env.example
+
+# Python runtime & virtual environment
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# Large SQL dumps (opsional, backup sql lokal tidak perlu ke git jika terlalu besar)
+# Uncomment baris di bawah bila tidak ingin push synthetic dump sql 100MB+ ke GitHub:
+# sql/synthetic_tm_sensor_read.sql
+# sql/kawaltani_simpul_telkom_original_backup.sql
+
+# Operating System files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary logs & test outputs
+*.log
+

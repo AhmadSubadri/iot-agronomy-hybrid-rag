@@ -298,14 +298,15 @@ Evaluation matrix varying top-$K \in \{2, 4, 6, 8\}$ agronomic chunks against $D
 
 ## 📜 Citation & BibTeX
 
-This codebase was developed as part of academic research at the Master's Program in Informatics, UIN Sunan Kalijaga Yogyakarta. If you use or reference this architecture, datasets, or methodology, please cite the thesis:
+This codebase was developed as part of academic research at the Master's Program in Informatics, State Islamic University (UIN) Sunan Kalijaga Yogyakarta. If you utilize or reference this architecture, datasets, or methodology in your work, please cite the thesis as follows:
 
 ```bibtex
 @mastersthesis{subadri2026kawaltani,
   author  = {Ahmad Subadri},
-  title   = {Implementasi Retrieval-Augmented Generation (RAG) Berbasis Data Sensor IoT Real-Time untuk Sistem Rekomendasi Tindakan Agronomi Tanaman Padi pada Platform KawalTani},
+  title   = {Implementation of Real-Time IoT Sensor-Driven Retrieval-Augmented Generation (RAG) for Rice Agronomic Action Recommendation Systems on the KawalTani Platform},
   school  = {Master's Program in Informatics, Faculty of Science and Technology, State Islamic University (UIN) Sunan Kalijaga},
   year    = {2026},
-  address = {Yogyakarta, Indonesia}
+  address = {Yogyakarta, Indonesia},
+  note    = {Original Thesis in Indonesian: "Implementasi Retrieval-Augmented Generation (RAG) Berbasis Data Sensor IoT Real-Time untuk Sistem Rekomendasi Tindakan Agronomi Tanaman Padi pada Platform KawalTani"}
 }
 ```

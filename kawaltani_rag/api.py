@@ -393,6 +393,17 @@ def ask(req: AskRequest):
         return _payload(q, mode, r, pipe.synthesize_local_answer(q, r),
                         llm={"provider": "-", "model": "tanpa LLM"}, baseline=baseline,
                         notice=str(e))
+    except Exception as e:
+        empty = dict(initial_route="error", route="error", retrieval_s=0.0)
+        return _payload(
+            q, mode, empty,
+            f"Terjadi kesalahan saat memproses pertanyaan: {str(e)}.\n\n"
+            f"**Panduan Pemeriksaan:**\n"
+            f"1. Pastikan database MySQL/MariaDB (Laragon) sedang aktif di `localhost:3306`.\n"
+            f"2. Pastikan file `.env` memuat `GEMINI_API_KEY` atau kunci API yang valid.",
+            llm={"provider": "-", "model": "error"},
+            notice=str(e),
+        )
 
 
 @app.post("/chat")

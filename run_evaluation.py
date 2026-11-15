@@ -104,23 +104,25 @@ def cmd_audit_retrieval(args):
     print(f"[OK] Ringkasan audit disimpan ke: {out_dir / 'audit_retrieval.json'}")
 
 
-def cmd_collect(args):
-    from kawaltani_rag.pipeline import RAGPipeline
-    pipe = RAGPipeline(index_dir=args.index_dir)
+def _collect_single_mode(pipe, qa, mode: str, provider: str, model: str, limit: int = None, sleep: float = 0.0) -> dict:
+    mode_clean = mode.upper()
+    if mode_clean in ("A", "BASELINE", "LLM_ONLY", "LLM"):
+        cfg_code = "A"
+    elif mode_clean in ("B", "SQL", "SQL_ONLY"):
+        cfg_code = "B"
+    elif mode_clean in ("C", "VECTOR", "VECTOR_ONLY"):
+        cfg_code = "C"
+    else:
+        cfg_code = "D"
 
-    with open(args.qa, encoding="utf-8") as f:
-        qa = list(csv.DictReader(f))
-    if args.limit:
-        qa = qa[:args.limit]
-
+    items = qa[:limit] if limit else qa
+    print(f"\n[RUN] Menjalankan Pengumpulan Jawaban — Konfigurasi {cfg_code} ({mode}) | Model: {provider}/{model} ({len(items)} kueri)...")
     results, errors = [], 0
-    for i, row in enumerate(qa, 1):
+
+    for i, row in enumerate(items, 1):
         q = row["question"]
         try:
-            if args.mode == "baseline":
-                r = pipe.answer_baseline(q, provider=args.provider, model=args.model)
-            else:
-                r = pipe.answer(q, provider=args.provider, model=args.model)
+            r = pipe.answer_by_mode(cfg_code, q, provider=provider, model=model)
             results.append(dict(
                 id=row["id"],
                 category=row.get("category", "general"),
@@ -128,7 +130,8 @@ def cmd_collect(args):
                 answer=r["answer"],
                 ground_truth=row["reference_answer"],
                 contexts=r["contexts"],
-                mode=args.mode,
+                mode=r["mode"],
+                configuration=cfg_code,
                 route=r["route"],
                 retrieval_s=r["retrieval_s"],
                 llm_s=r["llm"]["latency_s"],
@@ -139,18 +142,54 @@ def cmd_collect(args):
             ))
         except Exception as e:
             errors += 1
-            print(f"  [{i}/{len(qa)}] GAGAL {row['id']}: {type(e).__name__}: {e}", file=sys.stderr)
-        if i % 5 == 0 or i == len(qa):
-            print(f"  ... [{i}/{len(qa)}] selesai ({len(results)} sukses, {errors} gagal)", flush=True)
-        if args.sleep:
-            time.sleep(args.sleep)
+            print(f"  [{i}/{len(items)}] GAGAL {row['id']}: {type(e).__name__}: {e}", file=sys.stderr)
+        if i % 5 == 0 or i == len(items):
+            print(f"  ... [{i}/{len(items)}] selesai ({len(results)} sukses, {errors} gagal)", flush=True)
+        if sleep:
+            time.sleep(sleep)
 
-    meta = dict(mode=args.mode, provider=args.provider, model=args.model, n=len(results), errors=errors)
-    out_path = Path(args.out)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(dict(meta=meta, results=results), f, ensure_ascii=False, indent=1)
-    print(f"\n[OK] Tersimpan {len(results)} hasil ({errors} gagal) -> {out_path}")
+    meta = dict(
+        mode=mode,
+        configuration=cfg_code,
+        provider=provider,
+        model=model,
+        n=len(results),
+        errors=errors,
+        timestamp=time.strftime("%Y-%m-%d %H:%M:%S"),
+    )
+    return dict(meta=meta, results=results)
+
+
+def cmd_collect(args):
+    from kawaltani_rag.pipeline import RAGPipeline
+    pipe = RAGPipeline(index_dir=args.index_dir)
+
+    with open(args.qa, encoding="utf-8") as f:
+        qa = list(csv.DictReader(f))
+
+    modes_to_run = ["A", "B", "C", "D"] if args.mode == "all" else [args.mode]
+
+    for m in modes_to_run:
+        data = _collect_single_mode(
+            pipe=pipe,
+            qa=qa,
+            mode=m,
+            provider=args.provider,
+            model=args.model,
+            limit=args.limit,
+            sleep=args.sleep,
+        )
+        cfg = data["meta"]["configuration"]
+        if args.out and args.mode != "all":
+            out_path = Path(args.out)
+        else:
+            model_slug = args.model.replace(":", "_").replace("/", "_").replace(".", "_")
+            out_path = BASE_DIR / "results" / f"hasil_mode_{cfg}_{model_slug}.json"
+
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=1)
+        print(f"[OK] Tersimpan {len(data['results'])} hasil Konfigurasi {cfg} -> {out_path}")
 
 
 def cmd_score(args):
@@ -274,15 +313,15 @@ def main():
     a.add_argument("--index-dir", default=None)
     a.set_defaults(func=cmd_audit_retrieval)
 
-    c = sub.add_parser("collect", help="Jalankan pengumpulan jawaban LLM (RAG atau Baseline)")
+    c = sub.add_parser("collect", help="Jalankan pengumpulan jawaban LLM (A: Baseline, B: SQL-Only, C: Vector-Only, D: Hybrid RAG, atau all)")
     c.add_argument("--qa", default=str(BASE_DIR / "data" / "qa_dataset_100.csv"))
-    c.add_argument("--mode", choices=["rag", "baseline"], default="rag")
-    c.add_argument("--provider", default="openai")
-    c.add_argument("--model", default="gpt-4o-mini")
+    c.add_argument("--mode", choices=["A", "B", "C", "D", "all", "rag", "baseline", "sql_only", "vector_only"], default="D")
+    c.add_argument("--provider", default="gemini")
+    c.add_argument("--model", default="gemini-3.5-flash-lite")
     c.add_argument("--index-dir", default=None)
     c.add_argument("--limit", type=int, default=None)
     c.add_argument("--sleep", type=float, default=0.0)
-    c.add_argument("--out", default=str(BASE_DIR / "results" / "hasil_rag.json"))
+    c.add_argument("--out", default=None)
     c.set_defaults(func=cmd_collect)
 
     s = sub.add_parser("score", help="Hitung 4 metrik evaluasi RAGAS")

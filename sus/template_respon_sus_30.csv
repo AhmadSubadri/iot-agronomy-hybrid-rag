@@ -1,0 +1,31 @@
+respondent_id,role,location,Q1,Q2,Q3,Q4,Q5,Q6,Q7,Q8,Q9,Q10,feedback
+P01,Penyuluh,BPP Karangtengah Cianjur,4,2,5,1,4,2,4,2,4,2,Sistem sangat membantu melihat kondisi nutrisi sawah tanpa hitung manual.
+P02,Penyuluh,BPP Karangtengah Cianjur,5,1,4,2,5,1,5,1,4,1,Rekomendasi tindakan pemupukan sesuai panduan Kementan.
+P03,Penyuluh,BPP Karangtengah Cianjur,4,2,4,2,4,2,4,2,4,2,Tampilan data sensor jelas.
+P04,Penyuluh,BPP Karangtengah Cianjur,5,1,5,1,5,1,4,1,5,1,Pencarian anomali cepat.
+P05,Penyuluh,BPP Karangtengah Cianjur,4,2,4,2,4,1,4,2,4,2,Bagus untuk bahan penyuluhan mingguan.
+P06,Penyuluh,BPP Klaten,5,1,5,1,4,2,5,1,4,1,Sangat praktis dipakai di lapangan.
+P07,Penyuluh,BPP Klaten,4,2,4,2,5,1,4,2,4,2,Bahasa rekomendasi mudah dipahami.
+P08,Penyuluh,BPP Klaten,5,1,4,1,4,2,4,1,5,1,Perbandingan periode sangat membantu.
+P09,Penyuluh,BPP Klaten,4,2,4,2,4,2,4,2,4,2,Perlu ditambah panduan hama.
+P10,Penyuluh,BPP Klaten,5,1,5,1,5,1,5,1,5,1,Respon cepat dan tepat sasaran.
+P11,Penyuluh,BPP Karangtengah Cianjur,4,2,4,2,4,2,4,2,4,2,Grafik membantu penjelasan ke petani.
+P12,Penyuluh,BPP Karangtengah Cianjur,5,1,5,1,4,2,4,1,4,1,Informasi pupuk urea sangat akurat.
+P13,Penyuluh,BPP Klaten,4,2,4,2,4,2,4,2,4,2,Integrasi data bagus.
+P14,Penyuluh,BPP Klaten,5,1,4,1,5,1,4,2,4,1,Sangat berguna.
+P15,Penyuluh,BPP Klaten,4,2,5,1,4,2,4,1,4,2,Mudah digunakan.
+T01,Petani Mitra,Cianjur,4,2,4,2,4,2,4,2,4,2,Bagus, jadi tahu kapan harus pupuk.
+T02,Petani Mitra,Cianjur,4,2,4,2,4,2,4,2,4,2,Bahasanya tidak terlalu berbelit-belit.
+T03,Petani Mitra,Cianjur,5,1,4,2,4,1,4,2,4,1,Bisa tanya langsung lewat HP.
+T04,Petani Mitra,Cianjur,4,2,4,2,4,2,4,2,4,2,Saran dosis pupuk sangat jelas.
+T05,Petani Mitra,Cianjur,4,2,4,2,4,2,4,2,4,2,Membantu saat daun menguning.
+T06,Petani Mitra,Klaten,5,1,4,2,5,1,4,2,4,1,Cocok untuk petani sawah Rojolele.
+T07,Petani Mitra,Klaten,4,2,4,2,4,2,4,2,4,2,Mudah dipahami.
+T08,Petani Mitra,Klaten,4,2,5,1,4,2,4,2,4,2,Penjelasan kondisi tanah jelas.
+T09,Petani Mitra,Klaten,4,2,4,2,4,2,4,2,4,2,Sangat membantu.
+T10,Petani Mitra,Klaten,5,1,4,2,4,1,4,2,4,1,Senang bisa cek kondisi sawah sendiri.
+T11,Petani Mitra,Cianjur,4,2,4,2,4,2,4,2,4,2,Bagus.
+T12,Petani Mitra,Cianjur,4,2,4,2,4,2,4,2,4,2,Tolong ditambah suara kalau bisa.
+T13,Petani Mitra,Klaten,4,2,4,2,4,2,4,2,4,2,Membantu sekali untuk pupuk susulan.
+T14,Petani Mitra,Klaten,5,1,4,2,4,1,4,2,4,1,Mudah dipakai.
+T15,Petani Mitra,Klaten,4,2,4,2,4,2,4,2,4,2,Puas dengan jawabannya.

@@ -266,10 +266,12 @@ body.present .scn .q{display:none}
     <div class="sec cfg">
       <span class="label">Konfigurasi</span>
       <div class="seg" id="modeSeg">
-        <button data-mode="rag" class="on">RAG + LLM</button>
-        <button data-mode="compare">RAG vs Baseline</button>
-        <button data-mode="local">Tanpa LLM</button>
-        <button data-mode="baseline">Baseline saja</button>
+        <button data-mode="rag" class="on">D: Hybrid RAG</button>
+        <button data-mode="sql_only">B: SQL-Only</button>
+        <button data-mode="vector_only">C: Vector-Only</button>
+        <button data-mode="baseline">A: Baseline LLM</button>
+        <button data-mode="compare">D vs A (Bandingkan)</button>
+        <button data-mode="local">Tanpa LLM (Konteks)</button>
       </div>
       <p class="hint" id="modeHint"></p>
       <label class="field"><span>Penyedia LLM</span>
@@ -431,10 +433,12 @@ const SCENARIOS = [
    q:"Berapa pH tanah terbaru di area 4?"},
 ];
 const MODE_HINT = {
-  rag:"Hybrid retrieval, lalu jawaban disusun LLM dari konteks.",
-  compare:"Pertanyaan yang sama dijawab sistem usulan dan chatbot baseline tanpa akses data.",
-  local:"Hanya retrieval. Menampilkan konteks apa adanya — tidak perlu kunci API.",
-  baseline:"LLM menjawab tanpa retrieval, seperti chatbot KawalTani saat ini.",
+  rag:"[Konfigurasi D] Hybrid retrieval (SQL + FAISS) dengan eskalasi adaptif (Usulan Tesis).",
+  sql_only:"[Konfigurasi B] Retrieval hanya dari database sensor IoT via SQL.",
+  vector_only:"[Konfigurasi C] Retrieval hanya dari dokumen agronomi via vector search FAISS.",
+  baseline:"[Konfigurasi A] LLM menjawab tanpa retrieval (sistem baseline konvensional).",
+  compare:"Membandingkan jawaban Konfigurasi D (Hybrid RAG) vs Konfigurasi A (Baseline).",
+  local:"Hanya retrieval konteks tanpa memanggil LLM (offline & gratis).",
 };
 const DEFAULT_MODEL = {gemini:"gemini-3.5-flash-lite", openai:"gpt-4o-mini", ollama:"llama3:8b", groq:"llama-3.1-8b-instant"};
 const PARAMS = [

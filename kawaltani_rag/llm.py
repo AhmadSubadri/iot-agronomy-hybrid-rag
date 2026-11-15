@@ -48,7 +48,9 @@ def _post_json(url: str, payload: dict, headers: dict, timeout: int = 60, max_re
                 time.sleep(2 * (attempt + 1))
             else:
                 raise LLMError(f"HTTP request gagal setelah {max_retries}x percobaan: {e}") from e
-    raise last_err
+    if last_err is not None:
+        raise last_err
+    raise LLMError("HTTP request gagal tanpa pesan error spesifik.")
 
 
 def _openai_compatible(base_url: str, key_env: str, system: str, user: str,

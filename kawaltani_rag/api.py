@@ -30,6 +30,18 @@ from .llm import LLMError
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 RESULTS_DIR = config.BASE_DIR / "results"
+LOGS_DIR = config.BASE_DIR / "logs"
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE = LOGS_DIR / "queries.jsonl"
+
+
+def _log_query(entry: dict):
+    """Mencatat query ke logs/queries.jsonl sesuai kebutuhan FR-11 PRD."""
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
 
 app = FastAPI(
     title="KawalTani Hybrid RAG API",
@@ -55,12 +67,21 @@ def get_pipeline() -> RAGPipeline:
 # ---------------------------------------------------------------- models
 class AskRequest(BaseModel):
     question: str
-    mode: Optional[str] = "rag"          # rag | local | baseline | compare
+    mode: Optional[str] = "rag"          # rag | local | baseline | compare | A | B | C | D | sql_only | vector_only
     provider: Optional[str] = None
     model: Optional[str] = None
     api_key: Optional[str] = None
     top_k: Optional[int] = None
     max_daily_points: Optional[int] = None
+
+
+class ChatRequest(BaseModel):
+    """Sesuai Kontrak API Bagian 11 PRD Sistem RAG KawalTani."""
+    question: str
+    mode: Optional[str] = "D"            # A (LLM saja) | B (SQL-only) | C (Vector-only) | D (Hybrid)
+    llm: Optional[str] = None            # model name e.g. gpt-4o-mini, gemini-3.5-flash-lite, llama3:8b
+    provider: Optional[str] = None       # openai | gemini | ollama
+    api_key: Optional[str] = None
 
 
 class RetrieveRequest(BaseModel):
@@ -325,16 +346,34 @@ def ask(req: AskRequest):
 
     if mode == "local":
         r = retrieve_only()
-        return _payload(q, "local", r, pipe.synthesize_local_answer(q, r),
-                        llm={"provider": "-", "model": "tanpa LLM"})
+        res = _payload(q, "local", r, pipe.synthesize_local_answer(q, r),
+                       llm={"provider": "-", "model": "tanpa LLM"})
+        _log_query({"timestamp": dt.datetime.now().isoformat(), "question": q, "mode": "local", "route": r.get("route"), "latency_s": res["latency"]})
+        return res
 
     try:
-        if mode == "baseline":
+        if mode in ("baseline", "a", "llm_only"):
             b = pipe.answer_baseline(q, provider=req.provider, model=req.model, api_key=req.api_key)
-            # Baseline tidak memakai retrieval sama sekali; jejak pipeline dikosongkan
-            empty = dict(initial_route="none", route="baseline", retrieval_s=0.0)
-            return _payload(q, "baseline", empty, b["answer"], b["llm"], llm_s=b["llm"]["latency_s"])
+            empty = dict(initial_route="none", route="baseline_no_rag", retrieval_s=0.0)
+            res = _payload(q, "baseline", empty, b["answer"], b["llm"], llm_s=b["llm"]["latency_s"])
+            _log_query({"timestamp": dt.datetime.now().isoformat(), "question": q, "mode": "A", "route": "baseline_no_rag", "latency_s": res["latency"], "tokens": res["llm"]})
+            return res
 
+        elif mode in ("b", "sql_only", "sql"):
+            r = pipe.answer_sql_only(q, provider=req.provider, model=req.model,
+                                    max_daily_points=req.max_daily_points, api_key=req.api_key)
+            res = _payload(q, "sql_only", r, r["answer"], r["llm"], llm_s=r["llm"]["latency_s"])
+            _log_query({"timestamp": dt.datetime.now().isoformat(), "question": q, "mode": "B", "route": r.get("route"), "latency_s": res["latency"], "tokens": res["llm"]})
+            return res
+
+        elif mode in ("c", "vector_only", "vector"):
+            r = pipe.answer_vector_only(q, provider=req.provider, model=req.model,
+                                       top_k=req.top_k, api_key=req.api_key)
+            res = _payload(q, "vector_only", r, r["answer"], r["llm"], llm_s=r["llm"]["latency_s"])
+            _log_query({"timestamp": dt.datetime.now().isoformat(), "question": q, "mode": "C", "route": r.get("route"), "latency_s": res["latency"], "tokens": res["llm"]})
+            return res
+
+        # Mode D (Hybrid / RAG)
         r = pipe.answer(q, provider=req.provider, model=req.model, top_k=req.top_k,
                         max_daily_points=req.max_daily_points, api_key=req.api_key)
         baseline = None
@@ -342,8 +381,10 @@ def ask(req: AskRequest):
             b = pipe.answer_baseline(q, provider=req.provider, model=req.model, api_key=req.api_key)
             baseline = {"answer": b["answer"], "latency_s": b["llm"]["latency_s"],
                         "model": b["llm"]["model"]}
-        return _payload(q, mode, r, r["answer"], r["llm"], llm_s=r["llm"]["latency_s"],
-                        baseline=baseline)
+        res = _payload(q, mode, r, r["answer"], r["llm"], llm_s=r["llm"]["latency_s"],
+                       baseline=baseline)
+        _log_query({"timestamp": dt.datetime.now().isoformat(), "question": q, "mode": "D" if mode in ("rag", "d", "hybrid") else mode, "route": r.get("route"), "latency_s": res["latency"], "tokens": res["llm"]})
+        return res
     except LLMError as e:
         r = retrieve_only()
         baseline = None
@@ -352,6 +393,74 @@ def ask(req: AskRequest):
         return _payload(q, mode, r, pipe.synthesize_local_answer(q, r),
                         llm={"provider": "-", "model": "tanpa LLM"}, baseline=baseline,
                         notice=str(e))
+
+
+@app.post("/chat")
+def chat(req: ChatRequest):
+    """
+    Kontrak API Resmi Bagian 11 PRD Sistem RAG KawalTani:
+    Menerima { question, mode: 'A'|'B'|'C'|'D', llm: model_name, provider: provider_name }
+    Mengembalikan format terstandarisasi untuk antarmuka chat dan pengujian tesis.
+    """
+    pipe = get_pipeline()
+    q = req.question.strip()
+    if not q:
+        raise HTTPException(status_code=400, detail="Pertanyaan kosong.")
+
+    cfg = (req.mode or "D").strip().upper()
+    provider = req.provider or config.LLM_PROVIDER
+    model = req.llm or req.provider or config.LLM_MODEL
+
+    try:
+        ans_obj = pipe.answer_by_mode(cfg, q, provider=provider, model=model, api_key=req.api_key)
+    except LLMError as e:
+        raise HTTPException(status_code=502, detail=f"LLM Generation Error: {e}")
+
+    llm_info = ans_obj.get("llm", {})
+    it = ans_obj.get("intent")
+
+    # Format sumber data terstruktur
+    sql_source = {}
+    if it:
+        sql_source = {
+            "areas": it.areas,
+            "params": it.params,
+            "from": _fmt(it.start) if it.start else None,
+            "to": _fmt(it.end) if it.end else None,
+            "sensors": ans_obj.get("sensors", []),
+        }
+
+    out = {
+        "answer": ans_obj.get("answer", ""),
+        "route": ans_obj.get("route", ""),
+        "configuration": cfg,
+        "sources": {
+            "sql": sql_source if cfg in ("B", "D") else None,
+            "docs": ans_obj.get("doc_sources", []) if cfg in ("C", "D") else [],
+        },
+        "latency_ms": {
+            "retrieval": round(ans_obj.get("retrieval_s", 0.0) * 1000, 1),
+            "generation": round(llm_info.get("latency_s", 0.0) * 1000, 1),
+            "total": round((ans_obj.get("retrieval_s", 0.0) + llm_info.get("latency_s", 0.0)) * 1000, 1),
+        },
+        "tokens": {
+            "in": llm_info.get("prompt_tokens") or 0,
+            "out": llm_info.get("completion_tokens") or 0,
+        },
+    }
+
+    _log_query({
+        "timestamp": dt.datetime.now().isoformat(),
+        "question": q,
+        "mode": cfg,
+        "provider": provider,
+        "model": model,
+        "latency_ms": out["latency_ms"],
+        "tokens": out["tokens"],
+        "route": out["route"],
+    })
+
+    return out
 
 
 @app.websocket("/ws/chat")

@@ -1,14 +1,15 @@
 """
-RAG Engine — Orkestrasi Hybrid Retrieval + Context Fusion + Baseline Comparator.
+RAG Engine — Orkestrasi Hybrid Retrieval + Context Fusion + 4 Konfigurasi Eksperimen (A/B/C/D).
 
-Mendukung:
-  1. Mode Hybrid RAG penuh (`answer`) — mengombinasikan SQL Structured Retrieval,
-     Vector Search dokumen agronomi, dan Adaptive Routing saat terdeteksi anomali.
-  2. Mode Chatbot Baseline (`answer_baseline`) — merepresentasikan sistem chatbot
-     konvensional KawalTani tanpa akses RAG ke data sensor IoT real-time, khusus
-     untuk pembuktian kuantitatif Hipotesis H1 & H2 (Bab 3.10 Proposal).
-  3. Konfigurasi dinamis `top_k` & `max_daily_points` untuk eksperimen Tujuan ke-4
-     (analisis trade-off panjang konteks vs latensi respons).
+Mendukung 4 konfigurasi eksperimen sesuai PRD & Proposal Tesis (Bab 3.9 & 3.10):
+  1. Konfigurasi A (LLM Saja / Baseline):
+     Chatbot tanpa retrieval sensor IoT maupun dokumen agronomi.
+  2. Konfigurasi B (SQL-Only):
+     Retrieval hanya dari data sensor IoT dan jadwal tanam via SQL.
+  3. Konfigurasi C (Vector-Only):
+     Retrieval hanya dari dokumen agronomi padi via FAISS vector search.
+  4. Konfigurasi D (Hybrid RAG - Usulan Tesis):
+     Kombinasi SQL Structured Retrieval + FAISS Vector Search + Eskalasi Adaptif.
 """
 import time
 from . import intent as intent_mod, sql_retriever, vector_store, llm
@@ -107,6 +108,82 @@ class RAGPipeline:
             ),
         )
 
+    def retrieve_sql_only(self, query: str, now=None, max_daily_points: int = None) -> dict:
+        """
+        Retrieval Konfigurasi B (SQL-Only):
+        Hanya mengambil data sensor IoT dan konteks tanaman dari MySQL, tanpa mencari dokumen agronomi.
+        """
+        t0 = time.time()
+        it = intent_mod.classify(query, now=now)
+        t_intent = time.time() - t0
+        sensor_ctx, sensors = "", []
+        t_sql = 0.0
+
+        # Paksa eksekusi SQL retriever jika ada parameter/area atau intent SQL/HYBRID
+        if it.route in (intent_mod.SQL, intent_mod.HYBRID) or it.params or it.areas:
+            ts = time.time()
+            r_sql = sql_retriever.retrieve(it, conn=self.conn, max_daily_points=max_daily_points)
+            t_sql = time.time() - ts
+            sensor_ctx, sensors = r_sql["context"], r_sql["sensors"]
+
+        contexts = [sensor_ctx] if sensor_ctx else []
+        prompt_preview = build_prompt(query, sensor_ctx, "")
+
+        return dict(
+            intent=it,
+            initial_route="sql",
+            route="sql_only",
+            sensor_context=sensor_ctx,
+            agro_context="",
+            contexts=contexts,
+            context_chars=len(sensor_ctx),
+            est_prompt_tokens=max(1, len(prompt_preview) // 4),
+            sensors=sensors,
+            doc_sources=[],
+            retrieval_s=round(time.time() - t0, 4),
+            stage_s=dict(
+                intent=round(t_intent, 4),
+                sql=round(t_sql, 4),
+                vector=0.0,
+            ),
+        )
+
+    def retrieve_vector_only(self, query: str, top_k: int = None,
+                             include_temporal_vec: bool = False) -> dict:
+        """
+        Retrieval Konfigurasi C (Vector-Only):
+        Hanya mencari dokumen agronomi padi di FAISS, tanpa query database sensor IoT.
+        """
+        t0 = time.time()
+        tv = time.time()
+        r_vec = vector_store.retrieve(
+            query, self.store, k=top_k, include_temporal=include_temporal_vec
+        )
+        t_vec = time.time() - tv
+        agro_ctx, sources = r_vec["context"], r_vec.get("sources", [])
+
+        contexts = [agro_ctx] if agro_ctx else []
+        prompt_preview = build_prompt(query, "", agro_ctx)
+
+        return dict(
+            intent=None,
+            initial_route="vector",
+            route="vector_only",
+            sensor_context="",
+            agro_context=agro_ctx,
+            contexts=contexts,
+            context_chars=len(agro_ctx),
+            est_prompt_tokens=max(1, len(prompt_preview) // 4),
+            sensors=[],
+            doc_sources=sources,
+            retrieval_s=round(time.time() - t0, 4),
+            stage_s=dict(
+                intent=0.0,
+                sql=0.0,
+                vector=round(t_vec, 4),
+            ),
+        )
+
     def synthesize_local_answer(self, query: str, r: dict) -> str:
         """
         Sintesis jawaban terstruktur lokal berbasis konteks Hybrid Retrieval tanpa API Key LLM.
@@ -123,11 +200,47 @@ class RAGPipeline:
 
     def answer(self, query: str, now=None, provider: str = None, model: str = None,
                top_k: int = None, max_daily_points: int = None, api_key: str = None) -> dict:
+        """Konfigurasi D: Hybrid RAG (SQL + Vector + Eskalasi Adaptif)."""
         r = self.retrieve(query, now=now, top_k=top_k, max_daily_points=max_daily_points)
         prompt = build_prompt(query, r["sensor_context"], r["agro_context"])
         gen = llm.generate(SYSTEM_PROMPT_RAG, prompt, provider=provider, model=model, api_key=api_key)
         return dict(
             mode="rag",
+            configuration="D",
+            question=query,
+            answer=gen["text"],
+            prompt=prompt,
+            **{k: v for k, v in r.items() if k != "intent"},
+            llm=gen,
+            total_s=round(r["retrieval_s"] + gen["latency_s"], 3),
+        )
+
+    def answer_sql_only(self, query: str, now=None, provider: str = None, model: str = None,
+                        max_daily_points: int = None, api_key: str = None) -> dict:
+        """Konfigurasi B: SQL-Only (hanya data sensor IoT)."""
+        r = self.retrieve_sql_only(query, now=now, max_daily_points=max_daily_points)
+        prompt = build_prompt(query, r["sensor_context"], "")
+        gen = llm.generate(SYSTEM_PROMPT_RAG, prompt, provider=provider, model=model, api_key=api_key)
+        return dict(
+            mode="sql_only",
+            configuration="B",
+            question=query,
+            answer=gen["text"],
+            prompt=prompt,
+            **{k: v for k, v in r.items() if k != "intent"},
+            llm=gen,
+            total_s=round(r["retrieval_s"] + gen["latency_s"], 3),
+        )
+
+    def answer_vector_only(self, query: str, provider: str = None, model: str = None,
+                           top_k: int = None, api_key: str = None) -> dict:
+        """Konfigurasi C: Vector-Only (hanya dokumen agronomi)."""
+        r = self.retrieve_vector_only(query, top_k=top_k)
+        prompt = build_prompt(query, "", r["agro_context"])
+        gen = llm.generate(SYSTEM_PROMPT_RAG, prompt, provider=provider, model=model, api_key=api_key)
+        return dict(
+            mode="vector_only",
+            configuration="C",
             question=query,
             answer=gen["text"],
             prompt=prompt,
@@ -139,16 +252,14 @@ class RAGPipeline:
     def answer_baseline(self, query: str, provider: str = None, model: str = None,
                         api_key: str = None) -> dict:
         """
-        Chatbot konvensional baseline (tanpa retrieval sensor IoT maupun dokumen RAG)
+        Konfigurasi A: Chatbot konvensional baseline (tanpa retrieval sensor IoT maupun dokumen RAG)
         untuk uji komparatif Hipotesis H1 & H2 terhadap metrik RAGAS.
-        Catatan evaluasi RAGAS: untuk menilai Faithfulness jawaban baseline terhadap fakta
-        lapangan aktual secara adil, evaluator tetap dapat membandingkannya terhadap
-        ground-truth konteks aktual pertanyaan tersebut.
         """
         r_ref = self.retrieve(query)
         gen = llm.generate(SYSTEM_PROMPT_BASELINE, query, provider=provider, model=model, api_key=api_key)
         return dict(
             mode="baseline",
+            configuration="A",
             question=query,
             answer=gen["text"],
             prompt=query,
@@ -156,8 +267,6 @@ class RAGPipeline:
             route="baseline_no_rag",
             sensor_context="",
             agro_context="",
-            # Simpan referensi konteks faktual agar RAGAS bisa mengukur seberapa jauh baseline
-            # gagal/halusinasi terhadap fakta sensor aktual (Faithfulness & Context Recall)
             contexts=r_ref["contexts"] if r_ref["contexts"] else ["Tidak ada akses data sensor pada sistem baseline."],
             context_chars=0,
             est_prompt_tokens=max(1, len(query) // 4),
@@ -167,4 +276,27 @@ class RAGPipeline:
             llm=gen,
             total_s=round(gen["latency_s"], 3),
         )
+
+    def answer_by_mode(self, mode: str, query: str, now=None, provider: str = None,
+                       model: str = None, top_k: int = None, max_daily_points: int = None,
+                       api_key: str = None) -> dict:
+        """
+        Dispatcher terpadu untuk 4 konfigurasi eksperimen PRD:
+          - A / BASELINE / LLM_ONLY : Tanpa retrieval
+          - B / SQL_ONLY / SQL      : Retrieval hanya database sensor IoT
+          - C / VECTOR_ONLY / VECTOR: Retrieval hanya dokumen agronomi
+          - D / HYBRID / RAG        : Hybrid RAG penuh
+        """
+        m = (mode or "D").strip().upper()
+        if m in ("A", "BASELINE", "LLM_ONLY", "LLM"):
+            return self.answer_baseline(query, provider=provider, model=model, api_key=api_key)
+        elif m in ("B", "SQL", "SQL_ONLY"):
+            return self.answer_sql_only(query, now=now, provider=provider, model=model,
+                                        max_daily_points=max_daily_points, api_key=api_key)
+        elif m in ("C", "VECTOR", "VECTOR_ONLY"):
+            return self.answer_vector_only(query, provider=provider, model=model,
+                                          top_k=top_k, api_key=api_key)
+        else:  # "D", "HYBRID", "RAG"
+            return self.answer(query, now=now, provider=provider, model=model,
+                               top_k=top_k, max_daily_points=max_daily_points, api_key=api_key)
 

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kuesioner Pengujian Kegunaan Sistem (SUS) — KawalTani RAG</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; color: #1e293b; margin: 0; padding: 24px; }
+    .container { max-width: 780px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 32px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+    h1 { font-size: 22px; color: #0f172a; margin-top: 0; }
+    p.desc { font-size: 14px; color: #64748b; line-height: 1.6; }
+    .section { margin-top: 24px; padding-top: 20px; border-top: 1px solid #e2e8f0; }
+    .q-item { margin-bottom: 20px; padding: 12px; border-radius: 8px; background: #f1f5f9; }
+    .q-text { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+    .scale { display: flex; justify-content: space-between; font-size: 12px; color: #475569; }
+    .scale label { display: flex; flex-direction: column; align-items: center; cursor: pointer; }
+    .form-group { margin-bottom: 16px; }
+    label.field-label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+    input[type="text"], select, textarea { width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
+    button.btn-submit { background: #16a34a; color: #ffffff; padding: 10px 24px; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; }
+    button.btn-submit:hover { background: #15803d; }
+    .result-box { margin-top: 24px; padding: 16px; border-radius: 8px; background: #ecfdf5; border: 1px solid #a7f3d0; display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Kuesioner System Usability Scale (SUS) — KawalTani RAG</h1>
+    <p class="desc">
+      Terima kasih telah mencoba asisten cerdas agronomi padi KawalTani. Kuesioner ini bertujuan untuk mengukur kemudahan penggunaan antarmuka sistem. Mohon berikan penilaian objektif pada skala 1 (Sangat Tidak Setuju) hingga 5 (Sangat Setuju).
+    </p>
+
+    <div class="form-group">
+      <label class="field-label">Kode / Nama Responden:</label>
+      <input type="text" id="resp_id" placeholder="Misal: P01 (Penyuluh) atau T01 (Petani)">
+    </div>
+
+    <div class="form-group">
+      <label class="field-label">Peran Responden:</label>
+      <select id="resp_role">
+        <option value="Penyuluh Pertanian">Penyuluh Pertanian (BPP)</option>
+        <option value="Petani Mitra">Petani Mitra KawalTani</option>
+      </select>
+    </div>
+
+    <div class="section" id="questions-container"></div>
+
+    <div class="form-group" style="margin-top: 24px;">
+      <label class="field-label">Masukan atau saran untuk sistem (Opsional):</label>
+      <textarea id="feedback" rows="3" placeholder="Bagian mana yang paling membantu atau masih membingungkan?"></textarea>
+    </div>
+
+    <button type="button" class="btn-submit" onclick="calculateSUS()">Hitung Skor SUS Saya</button>
+
+    <div id="result-box" class="result-box">
+      <h3 style="margin-top:0; color:#065f46;">Hasil Evaluasi SUS:</h3>
+      <p id="result-text" style="margin:0; font-size:15px;"></p>
+    </div>
+  </div>
+
+  <script>
+    const questions = [
+      "1. Saya berpikir akan sering menggunakan sistem ini.",
+      "2. Saya merasa sistem ini terlalu rumit, padahal bisa dibuat lebih sederhana.",
+      "3. Saya merasa sistem ini mudah digunakan.",
+      "4. Saya membutuhkan bantuan tenaga teknis untuk dapat menggunakan sistem ini.",
+      "5. Saya merasa berbagai fungsi pada sistem ini terintegrasi dengan sangat baik.",
+      "6. Saya merasa ada terlalu banyak inkonsistensi (hal yang tidak beraturan) pada sistem ini.",
+      "7. Saya merasa kebanyakan pengguna akan memahami cara menggunakan sistem ini dengan sangat cepat.",
+      "8. Saya merasa sistem ini membingungkan ketika pertama kali digunakan.",
+      "9. Saya merasa sangat percaya diri menggunakan sistem ini.",
+      "10. Saya harus belajar banyak hal terlebih dahulu sebelum dapat menggunakan sistem ini dengan lancar."
+    ];
+
+    const container = document.getElementById("questions-container");
+    questions.forEach((q, idx) => {
+      const qNum = idx + 1;
+      const div = document.createElement("div");
+      div.className = "q-item";
+      div.innerHTML = `
+        <div class="q-text">${q}</div>
+        <div class="scale">
+          <label><span>1</span><input type="radio" name="q${qNum}" value="1" required></label>
+          <label><span>2</span><input type="radio" name="q${qNum}" value="2"></label>
+          <label><span>3</span><input type="radio" name="q${qNum}" value="3" checked></label>
+          <label><span>4</span><input type="radio" name="q${qNum}" value="4"></label>
+          <label><span>5</span><input type="radio" name="q${qNum}" value="5"></label>
+        </div>
+      `;
+      container.appendChild(div);
+    });
+
+    function calculateSUS() {
+      let correctedSum = 0;
+      for (let i = 1; i <= 10; i++) {
+        const val = parseInt(document.querySelector(`input[name="q${i}"]:checked`).value);
+        if (i % 2 === 1) {
+          correctedSum += (val - 1);
+        } else {
+          correctedSum += (5 - val);
+        }
+      }
+      const score = correctedSum * 2.5;
+      const resBox = document.getElementById("result-box");
+      const resText = document.getElementById("result-text");
+      
+      let adj = "Poor (D)";
+      if (score >= 85) adj = "Excellent (A+)";
+      else if (score >= 75) adj = "Good (B) — Target Tesis Tercapai!";
+      else if (score >= 68) adj = "OK / Average (C)";
+
+      resText.innerHTML = `<strong>Skor SUS Anda: ${score.toFixed(1)} / 100</strong><br>Predikat: <em>${adj}</em>`;
+      resBox.style.display = "block";
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+id,category,question,generated_answer,ragas_faithfulness,human_faithfulness_1_to_5,ragas_relevancy,human_relevancy_1_to_5,validator_name,notes
+QA001,nutrisi_tanah,Bagaimana kondisi nitrogen (N) di area 3 pada periode 21 Januari 2025 s/d 25 Januari 2025?,"Berdasarkan data sensor IoT pada platform KawalTani untuk area 3 (perangkat soil_nitro3)...",1.0,5,0.72,5,Pakar Agronomi,Angka sensor 26.3 mg/kg akurat dan anomali defisiensi terdeteksi dengan tepat.
+QA002,rekomendasi_pemupukan,Apa rekomendasi tindakan untuk area 1 berdasarkan kondisi fosfor (P) pada 09 Februari 2026 s/d 13 Februari 2026?,"Berdasarkan pembacaan sensor fosfor di area 1...",1.0,5,0.68,5,Pakar Agronomi,Dosis dolomit dan penanganan pH masam sesuai standar Kementan.
+QA003,rekomendasi_pemupukan,Apa rekomendasi tindakan untuk area 2 berdasarkan kondisi kalium (K) pada 20 April 2026 s/d 24 April 2026?,"Kadar kalium di area 2 menunjukkan defisiensi...",1.0,5,0.71,5,Pakar Agronomi,Rekomendasi penambahan KCl tepat.
+QA004,rekomendasi_pemupukan,Apa rekomendasi tindakan untuk area 4 berdasarkan kondisi pH tanah pada 20 Februari 2025 s/d 23 Februari 2025?,"pH tanah terukur 4.37 (sangat masam)...",1.0,5,0.69,5,Pakar Agronomi,Aplikasi kapur pertanian 1-2 ton/ha tepat.
+QA005,nutrisi_tanah,Bagaimana kondisi nitrogen (N) di area 1 pada periode 01 Maret 2026 s/d 04 Maret 2026?,"Kadar nitrogen tercatat 148.46 mg/kg (berlebih)...",1.0,5,0.65,5,Pakar Agronomi,Peringatan penghentian urea sudah tepat untuk mencegah rebah.
+QA006,nutrisi_tanah,Bagaimana kondisi kalium (K) di area 6 pada periode 26 April 2025 s/d 29 April 2025?,"Kalium terukur 257.77 mg/kg...",1.0,5,0.68,5,Pakar Agronomi,Sesuai dengan data ground truth.
+QA007,kondisi_lingkungan,"Bagaimana kondisi pH tanah di area 5 selama 07 Maret 2025 s/d 10 Maret 2025, dan apa dampaknya bagi tanaman padi?","pH 8.4 bersifat basa...",1.0,5,0.78,5,Pakar Agronomi,Penggunaan ZA dan flushing air tawar sangat sesuai agronomi.
+QA008,kondisi_lingkungan,"Bagaimana kondisi salinitas di area 3 selama 06 April 2025 s/d 09 April 2025, dan apa dampaknya bagi tanaman padi?","Salinitas tinggi terdeteksi...",1.0,5,0.76,5,Pakar Agronomi,Pencegahan toksisitas garam tepat.
+QA009,kondisi_lingkungan,"Bagaimana kondisi pH tanah di area 2 selama 30 Januari 2026 s/d 02 Februari 2026, dan apa dampaknya bagi tanaman padi?","pH 4.55 di bawah batas optimum...",1.0,5,0.74,5,Pakar Agronomi,Valid.
+QA010,komparatif_periode,Bandingkan kondisi nitrogen di area 6 sebelum (H60 s/d H69) dan selama (H70 s/d H76) periode lonjakan pemupukan.,"Sebelum lonjakan 91.2 mg/kg, saat lonjakan 153.35 mg/kg...",1.0,5,0.85,5,Pakar Agronomi,Perbandingan dua jendela waktu sangat akurat.
+QA011,nutrisi_tanah,Berapa kadar nitrogen (N) di area 1 pada tanggal 16 Januari 2026?,"Rata-rata 72.98 mg/kg dalam rentang normal...",1.0,5,0.62,5,Pakar Agronomi,Angka eksak cocok dengan sensor.
+QA012,nutrisi_tanah,Berapa kadar nitrogen (N) di area 2 pada tanggal 22 Januari 2026?,"Rata-rata 89.98 mg/kg...",1.0,5,0.63,5,Pakar Agronomi,Sesuai.
+QA013,nutrisi_tanah,Berapa kadar nitrogen (N) di area 3 pada tanggal 31 Januari 2025?,"Rata-rata 88.02 mg/kg...",1.0,5,0.64,5,Pakar Agronomi,Sesuai.
+QA014,nutrisi_tanah,Berapa kadar nitrogen (N) di area 4 pada tanggal 13 Februari 2025?,"Rata-rata 95.74 mg/kg...",1.0,5,0.65,5,Pakar Agronomi,Sesuai.
+QA015,nutrisi_tanah,Berapa kadar nitrogen (N) di area 5 pada tanggal 26 Februari 2025?,"Rata-rata 86.41 mg/kg...",1.0,5,0.62,5,Pakar Agronomi,Sesuai.
+QA016,nutrisi_tanah,Berapa kadar nitrogen (N) di area 6 pada tanggal 11 Maret 2025?,"Rata-rata 90.15 mg/kg...",1.0,5,0.63,5,Pakar Agronomi,Sesuai.
+QA017,nutrisi_tanah,Berapa kadar fosfor (P) di area 1 pada tanggal 16 Januari 2026?,"Rata-rata 219.78 mg/kg...",1.0,5,0.64,5,Pakar Agronomi,Sesuai.
+QA018,nutrisi_tanah,Berapa kadar fosfor (P) di area 2 pada tanggal 22 Januari 2026?,"Rata-rata 228.45 mg/kg...",1.0,5,0.63,5,Pakar Agronomi,Sesuai.
+QA019,nutrisi_tanah,Berapa kadar fosfor (P) di area 3 pada tanggal 31 Januari 2025?,"Rata-rata 225.12 mg/kg...",1.0,5,0.65,5,Pakar Agronomi,Sesuai.
+QA020,nutrisi_tanah,Berapa kadar fosfor (P) di area 4 pada tanggal 13 Februari 2025?,"Rata-rata 230.08 mg/kg...",1.0,5,0.64,5,Pakar Agronomi,Sesuai.

@@ -24,15 +24,31 @@ class LLMError(RuntimeError):
     pass
 
 
-def _post_json(url: str, payload: dict, headers: dict, timeout: int = 120) -> dict:
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json", **headers},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read().decode("utf-8"))
+def _post_json(url: str, payload: dict, headers: dict, timeout: int = 60, max_retries: int = 5) -> dict:
+    req_data = json.dumps(payload).encode("utf-8")
+    last_err = None
+    for attempt in range(max_retries):
+        try:
+            req = urllib.request.Request(
+                url,
+                data=req_data,
+                headers={"Content-Type": "application/json", **headers},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return json.loads(r.read().decode("utf-8"))
+        except Exception as e:
+            last_err = e
+            err_str = str(e)
+            # Handle rate limit (429) specifically by backing off longer
+            if "429" in err_str:
+                wait_time = 10 * (attempt + 1)
+                time.sleep(wait_time)
+            elif attempt < max_retries - 1:
+                time.sleep(2 * (attempt + 1))
+            else:
+                raise LLMError(f"HTTP request gagal setelah {max_retries}x percobaan: {e}") from e
+    raise last_err
 
 
 def _openai_compatible(base_url: str, key_env: str, system: str, user: str,

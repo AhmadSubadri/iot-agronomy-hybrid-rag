@@ -140,8 +140,8 @@ def cmd_collect(args):
         except Exception as e:
             errors += 1
             print(f"  [{i}/{len(qa)}] GAGAL {row['id']}: {type(e).__name__}: {e}", file=sys.stderr)
-        if i % 10 == 0:
-            print(f"  ...{i}/{len(qa)} selesai")
+        if i % 5 == 0 or i == len(qa):
+            print(f"  ... [{i}/{len(qa)}] selesai ({len(results)} sukses, {errors} gagal)", flush=True)
         if args.sleep:
             time.sleep(args.sleep)
 
@@ -154,32 +154,51 @@ def cmd_collect(args):
 
 
 def cmd_score(args):
-    try:
-        from datasets import Dataset
-        from ragas import evaluate
-        from ragas.metrics import faithfulness, answer_relevancy, context_precision, context_recall
-    except ImportError:
-        sys.exit("Paket evaluasi belum lengkap. Jalankan: pip install ragas datasets langchain-openai")
-
+    """
+    Hitung 4 metrik evaluasi RAGAS (Faithfulness, Answer Relevancy, Context Precision, Context Recall).
+    Mendukung LLM Judge Gemini/OpenAI dan Sentence-Transformers secara native.
+    """
     with open(args.results, encoding="utf-8") as f:
         data = json.load(f)
     rows = data["results"]
+    meta = data.get("meta", {})
+    provider = getattr(args, "provider", None) or meta.get("provider", "gemini")
+    model = getattr(args, "model", None) or meta.get("model", "gemini-3.5-flash-lite")
 
-    ds = Dataset.from_dict({
-        "question": [r["question"] for r in rows],
-        "answer": [r["answer"] for r in rows],
-        "contexts": [r["contexts"] for r in rows],
-        "ground_truth": [r["ground_truth"] for r in rows],
-    })
-    scores = evaluate(ds, metrics=[faithfulness, answer_relevancy, context_precision, context_recall])
-    df = scores.to_pandas()
+    print(f"\nMenghitung skor RAGAS untuk {len(rows)} sampel menggunakan LLM Judge: {provider} ({model})...")
+    
+    from kawaltani_rag.ragas_evaluator import RagasEvaluator
+    import pandas as pd
+    
+    evaluator = RagasEvaluator(provider=provider, model=model)
+    scored_rows = []
+    
+    for i, r in enumerate(rows, 1):
+        try:
+            scores = evaluator.evaluate_item(
+                question=r["question"],
+                answer=r["answer"],
+                contexts=r.get("contexts", []),
+                ground_truth=r.get("ground_truth", "")
+            )
+            item = dict(r)
+            item.update(scores)
+            scored_rows.append(item)
+            if i % 5 == 0 or i == len(rows):
+                print(f"  [{i}/{len(rows)}] Faithfulness: {scores['faithfulness']:.2f} | Relevancy: {scores['answer_relevancy']:.2f} | Precision: {scores['context_precision']:.2f} | Recall: {scores['context_recall']:.2f}")
+        except Exception as e:
+            print(f"  [{i}/{len(rows)}] GAGAL evaluasi: {e}")
+            item = dict(r)
+            item.update({"faithfulness": 0.0, "answer_relevancy": 0.0, "context_precision": 0.0, "context_recall": 0.0})
+            scored_rows.append(item)
 
+    df = pd.DataFrame(scored_rows)
     target = dict(faithfulness=0.80, answer_relevancy=0.80, context_precision=0.75, context_recall=0.75)
-    print(f"\n=== HASIL RAGAS ({data['meta'].get('mode','rag').upper()} — {data['meta']['model']}) ===")
+    print(f"\n=== HASIL RAGAS ({meta.get('mode','rag').upper()} — {model}) ===")
     for metric, minimum in target.items():
         if metric in df.columns:
-            val = df[metric].mean()
-            status = "TERCAPAI" if val > minimum else "BELUM TERCAPAI"
+            val = float(df[metric].mean())
+            status = "TERCAPAI (Sesuai Target Tesis)" if val >= minimum else "BELUM TERCAPAI"
             print(f"  {metric:18s}: {val:.4f} (Target > {minimum:.2f}) -> {status}")
 
     out_csv = args.out or str(args.results).replace(".json", "_ragas.csv")
@@ -268,6 +287,8 @@ def main():
 
     s = sub.add_parser("score", help="Hitung 4 metrik evaluasi RAGAS")
     s.add_argument("--results", required=True)
+    s.add_argument("--provider", default=None, help="LLM Judge Provider (default: dari hasil json atau gemini)")
+    s.add_argument("--model", default=None, help="LLM Judge Model (default: dari hasil json atau gemini-3.5-flash-lite)")
     s.add_argument("--out", default=None)
     s.set_defaults(func=cmd_score)
 
